@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bountystash</title>
+  <style>
+    :root {
+      --bg: #f7f5ef;
+      --ink: #1f2933;
+      --muted: #52606d;
+      --accent: #0e7490;
+      --card: #ffffff;
+      --border: #d9e2ec;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Georgia, "Times New Roman", serif;
+      background:
+        radial-gradient(circle at 20% 0%, rgba(14,116,144,0.08), transparent 40%),
+        linear-gradient(180deg, var(--bg), #fff);
+      color: var(--ink);
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    main {
+      width: min(780px, 100%);
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 40px 28px;
+      box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+    }
+
+    h1 {
+      margin: 0 0 14px;
+      font-size: clamp(2rem, 5vw, 2.8rem);
+      line-height: 1.05;
+      letter-spacing: 0.01em;
+    }
+
+    p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 1.05rem;
+      line-height: 1.6;
+      max-width: 64ch;
+    }
+
+    .accent {
+      color: var(--accent);
+      font-style: italic;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Bountystash</h1>
+    <p>
+      Thin, server-rendered intake for turning messy technical asks into
+      <span class="accent">verifiable work packets</span>.
+    </p>
+  </main>
+</body>
+</html>
