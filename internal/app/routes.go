@@ -4,6 +4,7 @@ import (
 	"html/template"
 	"net/http"
 
+	"bountystash/internal/http/handlers"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -28,6 +29,8 @@ func NewRouter() (http.Handler, error) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
 	})
+
+	r.Post("/draft", handlers.HandleDraftPreviewPost)
 
 	return r, nil
 }
