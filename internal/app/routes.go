@@ -5,12 +5,13 @@ import (
 	"net/http"
 
 	"bountystash/internal/http/handlers"
+	"bountystash/internal/views"
 	"github.com/go-chi/chi/v5"
 )
 
 // NewRouter wires the minimal HTTP surface for milestone bootstrap.
 func NewRouter() (http.Handler, error) {
-	homeTemplate, err := template.ParseFiles("internal/views/home.tmpl")
+	homeTemplate, err := template.ParseFS(views.FS, "home.tmpl")
 	if err != nil {
 		return nil, err
 	}
