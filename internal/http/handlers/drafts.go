@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
-	"log"
 	"net/http"
 	"regexp"
 	"strings"
@@ -67,7 +66,6 @@ func (h *DraftHandler) HandleDraftPost(w http.ResponseWriter, r *http.Request) {
 	normalized := normalizeDraft(input)
 	workID, err := h.insertDraft(r.Context(), normalized)
 	if err != nil {
-		log.Printf("insertDraft failed: %v", err)
 		http.Error(w, "failed to persist draft", http.StatusInternalServerError)
 		return
 	}

@@ -46,26 +46,109 @@
     }
 
     p {
-      margin: 0;
+      margin: 0 0 16px;
       color: var(--muted);
-      font-size: 1.05rem;
-      line-height: 1.6;
-      max-width: 64ch;
+      font-size: 1rem;
+      line-height: 1.5;
     }
 
-    .accent {
-      color: var(--accent);
-      font-style: italic;
+    form {
+      margin-top: 20px;
+      display: grid;
+      gap: 14px;
+    }
+
+    label {
+      display: grid;
+      gap: 6px;
+      font-size: 0.95rem;
+      color: var(--ink);
+    }
+
+    input, select, textarea, button {
+      font: inherit;
+      color: var(--ink);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      background: #fff;
+    }
+
+    textarea {
+      min-height: 96px;
+      resize: vertical;
+    }
+
+    .grid {
+      display: grid;
+      gap: 14px;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    }
+
+    button {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+      cursor: pointer;
+      width: fit-content;
     }
   </style>
 </head>
 <body>
   <main>
     <h1>Bountystash</h1>
-    <p>
-      Thin, server-rendered intake for turning messy technical asks into
-      <span class="accent">verifiable work packets</span>.
-    </p>
+    <p>Submit a draft intake packet. This will persist and redirect to its work page.</p>
+
+    <form method="post" action="/draft">
+      <label>
+        Title
+        <input type="text" name="title" placeholder="Short task title" required>
+      </label>
+
+      <div class="grid">
+        <label>
+          Kind
+          <select name="kind" required>
+            <option value="bounty">bounty</option>
+            <option value="rfq">rfq</option>
+            <option value="rfp">rfp</option>
+            <option value="private_security">private_security</option>
+          </select>
+        </label>
+
+        <label>
+          Visibility
+          <select name="visibility" required>
+            <option value="draft">draft</option>
+            <option value="private">private</option>
+            <option value="public">public</option>
+            <option value="archived">archived</option>
+          </select>
+        </label>
+      </div>
+
+      <label>
+        Scope
+        <textarea name="scope" placeholder="One line per scope item"></textarea>
+      </label>
+
+      <label>
+        Deliverables
+        <textarea name="deliverables" placeholder="One line per deliverable"></textarea>
+      </label>
+
+      <label>
+        Acceptance Criteria
+        <textarea name="acceptance_criteria" placeholder="One line per acceptance criterion"></textarea>
+      </label>
+
+      <label>
+        Reward / Quote Model
+        <input type="text" name="reward_model" placeholder="Fixed bounty, quoted engagement, etc.">
+      </label>
+
+      <button type="submit">Create Draft</button>
+    </form>
   </main>
 </body>
 </html>
