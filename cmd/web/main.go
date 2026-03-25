@@ -10,7 +10,7 @@ import (
 func main() {
 	cfg := app.LoadConfig()
 
-	router, err := app.NewRouter()
+	router, err := app.NewRouter(cfg)
 	if err != nil {
 		log.Fatalf("failed to initialize router: %v", err)
 	}

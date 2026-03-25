@@ -2,5 +2,5 @@ package views
 
 import "embed"
 
-//go:embed home.tmpl
+//go:embed *.tmpl
 var FS embed.FS

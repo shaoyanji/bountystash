@@ -4,7 +4,8 @@ import "os"
 
 // Config holds runtime settings for the web server.
 type Config struct {
-	Addr string
+	Addr        string
+	DatabaseURL string
 }
 
 // LoadConfig reads configuration from environment with safe defaults.
@@ -15,6 +16,7 @@ func LoadConfig() Config {
 	}
 
 	return Config{
-		Addr: ":" + port,
+		Addr:        ":" + port,
+		DatabaseURL: os.Getenv("DATABASE_URL"),
 	}
 }

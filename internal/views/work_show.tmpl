@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Work Item {{.ID}}</title>
+  <style>
+    body {
+      font-family: Georgia, "Times New Roman", serif;
+      margin: 0;
+      background: #f9fafb;
+      color: #111827;
+      padding: 24px;
+    }
+    main {
+      max-width: 860px;
+      margin: 0 auto;
+      background: #ffffff;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 24px;
+    }
+    h1, h2 { margin-top: 0; }
+    ul { margin-top: 0.25rem; }
+    .meta { color: #374151; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>{{.Packet.Title}}</h1>
+    <p class="meta"><strong>ID:</strong> {{.ID}}</p>
+    <p class="meta"><strong>Kind:</strong> {{.Packet.Kind}}</p>
+    <p class="meta"><strong>Visibility:</strong> {{.Packet.Visibility}}</p>
+    <p class="meta"><strong>Reward / Quote Model:</strong> {{.Packet.RewardModel}}</p>
+
+    <section>
+      <h2>Scope</h2>
+      <ul>{{range .Packet.Scope}}<li>{{.}}</li>{{else}}<li>None provided</li>{{end}}</ul>
+    </section>
+
+    <section>
+      <h2>Deliverables</h2>
+      <ul>{{range .Packet.Deliverables}}<li>{{.}}</li>{{else}}<li>None provided</li>{{end}}</ul>
+    </section>
+
+    <section>
+      <h2>Acceptance Criteria</h2>
+      <ul>{{range .Packet.AcceptanceCriteria}}<li>{{.}}</li>{{else}}<li>None provided</li>{{end}}</ul>
+    </section>
+  </main>
+</body>
+</html>
