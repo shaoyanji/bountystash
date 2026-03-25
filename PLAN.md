@@ -2,32 +2,55 @@
 
 ## Objective
 
-Implement the initial Bountystash skeleton as a thin server-rendered Go application backed by Postgres / Supabase, with immutable work packets, basic provenance, and a minimal review flow.
+Implement Bountystash as a thin, server-rendered Go application backed by Postgres / Supabase, with immutable work packets, concrete hash-based provenance, and a minimal reviewer-facing flow.
 
-This plan is intentionally narrow.
+This plan stays intentionally narrow.
+
 The target is not a full marketplace.
 The target is a working core for:
 
 - intake
-- packetization
-- persistence
-- provenance
+- normalization
+- immutable persistence
+- hash-based provenance
 - review
-- publish
+- controlled publishability
+
+---
+
+## Current baseline
+
+The repository already has a working thin prototype with the following proven pieces:
+
+- `GET /` renders a server-side landing page
+- `GET /healthz` returns `ok`
+- `POST /draft` accepts form input
+- `GET /examples/{slug}` renders seeded example content
+- `POST /draft` can persist to Postgres when `DATABASE_URL` is configured and the schema is applied
+- `GET /work/{id}` renders a persisted work item from Postgres
+- `work_items` / `work_versions` use an immutable version model
+- exact hash and quotient hash are computed and stored on create
+- `private_security` defaults to private visibility
+- the app is buildable with Nix and deployable on Garnix
+
+That means Bountystash is no longer just a stub.
+It is a thin persisted prototype.
+The next work should extend the core, not restart it.
 
 ---
 
 ## Success criteria
 
-The implementation is successful when the following work end-to-end:
+The implementation is successful for this phase when the following work end-to-end:
 
-1. `GET /` renders the landing page from Go templates.
-2. `POST /draft` accepts a form submission and returns a rendered normalized brief preview.
-3. `GET /examples/:slug` renders at least one seeded example.
-4. `work_items` and `work_versions` persist correctly in Postgres.
-5. exact hash and quotient hash are computed and stored for each created version.
-6. a reviewer queue page exists and renders queued drafts.
+1. `GET /` renders a usable intake page from Go templates.
+2. `POST /draft` accepts a real form submission, normalizes it, persists it, and redirects to a persisted work page.
+3. `GET /work/{id}` renders the persisted current version from Postgres.
+4. `GET /examples/{slug}` renders seeded examples through the same or closely related packet view layer.
+5. `work_items` and `work_versions` persist correctly in Postgres.
+6. exact hash and quotient hash are computed and stored for each created version.
 7. `private_security` items default to private visibility.
+8. a minimal review queue page exists and renders queued drafts or review candidates.
 
 ---
 
@@ -43,137 +66,108 @@ Do not implement yet:
 - autonomous in-product multi-agent execution
 - automatic CVE or disclosure submission flows
 - advanced semantic search beyond simple scaffolding
+- large client-side SPA architecture
+- broad organization/user/account systems unless forced by the review flow
 
 ---
 
 ## Phase map
 
-### Phase 0 — bootstrap the repository
+### Phase 0 — repository bootstrap
 
 Goal: make the repo runnable and structured.
 
-Deliverables:
+Status: largely complete.
 
-- initialize Go module
-- create top-level directory structure
-- add `.env.example`
-- add `README.md`
-- add `Taskfile.yml`
-- add `flake.nix` / `flake.lock` if using Nix dev shell
-- add `docker-compose.yml` for local Postgres if desired
+Delivered or expected:
+
+- Go module
+- top-level app structure
+- Nix flake
+- basic config loading
+- runnable app entrypoint
 
 Acceptance:
 
-- project tree matches the agreed skeleton
-- app can compile with placeholder handlers
-- config loads cleanly
+- app compiles
+- config loads
+- route wiring is coherent
 
-Suggested files:
+Core files:
 
 - `go.mod`
 - `cmd/web/main.go`
-- `internal/app/app.go`
 - `internal/app/config.go`
 - `internal/app/routes.go`
 
 ---
 
-### Phase 1 — schema and migrations
+### Phase 1 — relational core
 
-Goal: establish the relational source of truth.
+Goal: establish the minimum relational source of truth.
 
-Deliverables:
+Status: complete for the current prototype scope.
 
-- initial migrations
-- sqlc config
-- query files for core entities
-- base indexes and constraints
+Current minimum tables:
 
-Minimum tables:
-
-- `users`
-- `organizations`
 - `work_items`
 - `work_versions`
-- `submissions`
-- `artifacts`
-- `attestations`
-- `lineage_edges`
-- `queue_jobs`
 
-Acceptance:
+Current acceptance:
 
-- migrations apply cleanly on empty database
-- schema supports creating a work item and a version
-- sqlc generation succeeds
+- migration applies on empty database
+- schema supports creating a work item and version
+- immutable version flow is encoded structurally
+- current version can be read back cleanly
 
-Suggested order:
+Current files:
 
-1. `0001_init.sql`
-2. `0002_work_items.sql`
-3. `0003_work_versions.sql`
-4. `0004_submissions.sql`
-5. `0005_artifacts.sql`
-6. `0006_attestations.sql`
-7. `0007_lineage_edges.sql`
-8. `0008_queue_jobs.sql`
-9. `0009_rls_policies.sql`
+- `db/migrations/0001_init.sql`
+- `db/sqlc.yaml`
+
+Important note:
+
+This phase is intentionally smaller than the original larger-schema vision.
+Do not expand into `users`, `organizations`, `submissions`, `artifacts`, `attestations`, `lineage_edges`, or `queue_jobs` unless an actual next milestone requires them.
 
 ---
 
-### Phase 2 — HTTP server and rendering
+### Phase 2 — HTTP surface and rendering
 
-Goal: wire the minimal web surface.
+Goal: provide the minimum HTML-first product surface.
 
-Deliverables:
+Status: mostly complete.
 
-- render landing page from template
-- health endpoint
-- example route
-- draft handler route
-- shared rendering helpers
-
-Routes:
+Routes in scope:
 
 - `GET /`
 - `GET /healthz`
-- `GET /examples/:slug`
+- `GET /examples/{slug}`
 - `POST /draft`
+- `GET /work/{id}`
 
 Acceptance:
 
 - all routes respond successfully
 - templates render without client-side framework support
-- iframe-targetable preview response works
+- landing page is a real intake surface, not just placeholder copy
+- draft submission ends in a persisted show page
 
-Suggested files:
+Current files likely involved:
 
-- `internal/http/handlers/home.go`
-- `internal/http/handlers/examples.go`
 - `internal/http/handlers/drafts.go`
-- `internal/http/handlers/health.go`
-- `internal/http/render/render.go`
+- `internal/http/handlers/examples.go`
 - `internal/views/home.tmpl`
-- `internal/views/draft_preview.tmpl`
 - `internal/views/examples_show.tmpl`
+- `internal/views/work_show.tmpl`
 
 ---
 
-### Phase 3 — packet pipeline
+### Phase 3 — packet normalization
 
-Goal: transform messy form input into normalized work packets.
+Goal: transform messy form input into deterministic packet data.
 
-Deliverables:
-
-- input structs
-- normalization logic
-- kind classification
-- validation logic
-- version metadata generation
-
-Core package:
-
-- `internal/packets/`
+Status: partially complete and functioning.
 
 Required outputs:
 
@@ -181,231 +175,228 @@ Required outputs:
 - packet kind
 - scope list
 - deliverables list
-- acceptance list
-- reward/quote/proposal model scaffold
+- acceptance criteria list
+- reward/quote/proposal model field
 - visibility intent
+- safe default behavior for `private_security`
 
 Acceptance:
 
-- same input deterministically produces same normalized packet shape
-- invalid inputs return clear validation errors
-- `private_security` requests force safe defaults
+- same input deterministically produces the same normalized packet structure
+- invalid inputs can return clear validation errors
+- textarea-style newlines are handled cleanly
+- CLI-submitted escaped newlines may be normalized if useful, but this is secondary
 
-Suggested files:
+Suggested package focus:
 
-- `types.go`
-- `normalize.go`
-- `classify.go`
-- `validate.go`
-- `version.go`
+- `internal/packets/`
+
+Near-term improvement:
+
+- separate normalization and validation concerns more explicitly if the current single-file approach becomes hard to maintain
 
 ---
 
-### Phase 4 — persistence flow
+### Phase 4 — persisted create/read flow
 
-Goal: save normalized packets as versioned work items.
+Goal: make drafts real persisted work items.
 
-Deliverables:
+Status: complete for initial create/read path.
 
-- create work item if needed
-- create immutable work version
-- update `current_version_id`
-- render saved preview or show page
+Current behavior:
+
+- `POST /draft` creates a new `work_item`
+- `POST /draft` creates version `1` in `work_versions`
+- `current_version_id` is set on create
+- `GET /work/{id}` reads the persisted current version back
 
 Acceptance:
 
-- a form submission can create a persisted `work_item`
-- each edit creates a new `work_version`
-- no in-place mutation of prior versions occurs
+- create path works against real Postgres / Supabase
+- read path works against persisted data
+- no in-place mutation of previous versions occurs
 
-Suggested route expansion:
+What is still deferred inside this phase:
 
-- `POST /work-items`
-- `GET /work-items/:id`
+- editing an existing work item into version `2+`
+- authoring workflows beyond initial create
+- reviewer edits / annotations
 
 ---
 
-### Phase 5 — provenance layer
+### Phase 5 — provenance core
 
-Goal: make packet creation produce concrete provenance artifacts.
+Goal: keep persisted versions concrete and auditable.
 
-Deliverables:
+Status: partially complete.
 
-- canonical serialization helper
+Currently in place:
+
+- canonical packet serialization for create path
 - exact hash computation
-- quotient projection function
+- quotient projection
 - quotient hash computation
-- attestation record creation
-- lineage edge creation where appropriate
+- hash persistence on `work_versions`
 
-Acceptance:
+Acceptance for this phase:
 
 - every persisted version stores exact hash and quotient hash
-- at least one attestation is written per created version
-- projection rules are explicit and documented
+- projection rules are explicit in code
+- hash behavior is deterministic
 
-Suggested files:
+Deferred within provenance:
 
-- `internal/provenance/hash.go`
-- `internal/provenance/quotient.go`
-- `internal/provenance/attest.go`
-- `internal/provenance/lineage.go`
+- separate attestation table
+- lineage edges
+- signed attestations
+- richer provenance documents
+
+Suggested docs:
+
 - `docs/provenance-model.md`
 
 ---
 
 ### Phase 6 — examples and seeded content
 
-Goal: make the system demonstrable before real inventory exists.
+Goal: make the product demonstrable before real inventory exists.
 
-Deliverables:
+Status: complete at basic level.
 
-- seeded example briefs
-- example loader
-- one public example per kind category of interest
+Current examples:
 
-Initial examples:
-
-- `auth-loop.md`
-- `webhook-rfq.md`
-- `pipeline-rfp.md`
+- `auth-loop`
+- `webhook-rfq`
+- `pipeline-rfp`
 
 Acceptance:
 
-- `GET /examples/:slug` works for seeded examples
-- examples render through the same packet view layer as real drafts where practical
+- `GET /examples/{slug}` works
+- examples are useful for demo and development
+- examples do not replace real persistence work
 
 ---
 
 ### Phase 7 — review queue
 
-Goal: establish the first reviewer-facing flow.
+Goal: establish the first reviewer-facing operational flow.
+
+Status: not yet implemented.
 
 Deliverables:
 
-- queue job record creation for draft verification
-- worker stub or synchronous placeholder
-- review page listing queued items
-- draft status transitions into review flow
+- review queue data model
+- draft-to-review transition
+- reviewer queue page
+- minimal review status handling
 
 Acceptance:
 
-- creating a draft can enqueue a verification job
-- reviewer page renders queued entries
-- `private_security` drafts appear only in appropriate private review contexts
+- creating a draft can place it into a reviewable state
+- reviewer page renders queued items
+- `private_security` drafts are clearly separated from public-facing flows
+
+Important constraint:
+
+Keep this phase minimal.
+A simple queue page is enough.
+Do not build a complex job system unless clearly needed.
 
 Suggested files:
 
-- `internal/queue/jobs.go`
-- `internal/queue/runner.go`
-- `internal/queue/verify_draft.go`
 - `internal/http/handlers/review.go`
 - `internal/views/review_queue.tmpl`
 
 ---
 
-### Phase 8 — auth and visibility controls
+### Phase 8 — access control and visibility guards
 
-Goal: add safe access control around draft/private/public flows.
+Goal: add safe access control around draft/private/public behavior.
+
+Status: deferred.
 
 Deliverables:
 
-- Supabase JWT verification middleware
-- request context user loading
-- draft/private/public route guards
-- RLS alignment with app behavior
+- auth middleware
+- request user context
+- route guards
+- reviewer-only visibility paths
+- alignment with any future Supabase auth/RLS choices
 
 Acceptance:
 
-- unauthenticated users can only see public resources
-- authenticated issuers can see their drafts/private items
-- reviewer role logic is explicit and not accidental
+- unauthenticated users only see public resources
+- private drafts stay private
+- reviewer access is explicit, not accidental
 
-Suggested files:
+Important note:
 
-- `internal/auth/verify.go`
-- `internal/auth/middleware.go`
-- `internal/auth/context.go`
-- `docs/auth-model.md`
+Do not start here before the review flow exists.
 
 ---
 
-## Parallel workstreams for Codex / subagents
+## Parallel workstreams
 
-These tracks can proceed largely in parallel with coordination.
+These can proceed in parallel if needed, but should stay tightly scoped.
 
-### Track A — repository bootstrap
-
-Scope:
-
-- config
-- app wiring
-- route skeleton
-- local dev tooling
-
-Outputs:
-
-- runnable app shell
-- health endpoint
-- base route registration
-
-### Track B — schema and queries
+### Track A — product surface
 
 Scope:
 
-- migrations
-- sqlc config
-- base query definitions
+- home page
+- intake form
+- persisted work item show page
+- examples
 
 Outputs:
 
-- working database layer
-- generated models / query wrappers
+- usable HTML-first surface
+
+### Track B — persistence
+
+Scope:
+
+- migration maintenance
+- DB connection
+- create/read flow
+- future versioned update flow
+
+Outputs:
+
+- reliable Postgres-backed core
 
 ### Track C — packet pipeline
 
 Scope:
 
-- input types
 - normalization
 - validation
-- version metadata
+- deterministic shaping
 
 Outputs:
 
-- deterministic normalized packet generation
+- stable packet generation
 
 ### Track D — provenance
 
 Scope:
 
-- exact hashing
+- canonical JSON
+- exact hash
 - quotient projection
-- attestation helpers
+- quotient hash
 
 Outputs:
 
 - persistence-ready provenance data
 
-### Track E — rendering and examples
+### Track E — review
 
 Scope:
 
-- templates
-- preview rendering
-- example seeding
-
-Outputs:
-
-- demonstrable UI without real inventory
-
-### Track F — review flow
-
-Scope:
-
-- queue table usage
-- reviewer list page
-- initial verification worker
+- queue state
+- queue page
+- reviewer-facing route
 
 Outputs:
 
@@ -413,59 +404,48 @@ Outputs:
 
 ---
 
-## Recommended implementation order
+## Recommended implementation order from here
 
-If a single builder is working sequentially, use this order:
+From the current repo state, use this order:
 
-1. repo bootstrap
-2. schema + migrations
-3. sqlc config and queries
-4. route skeleton and template rendering
-5. packet normalization
-6. `POST /draft`
-7. persistence to `work_items` and `work_versions`
-8. exact and quotient hash persistence
-9. example route and seeds
-10. review queue page
-11. auth + visibility controls
-
-This sequence gets the visible product working early while still preserving the trust model.
+1. tighten intake form on `GET /`
+2. keep persisted `POST /draft` / `GET /work/{id}` stable
+3. clean up normalization edge cases
+4. add tests around create/read and hashing
+5. add minimal review queue page
+6. add minimal review state transitions
+7. add auth / visibility guards
+8. expand provenance only if the review flow truly needs it
 
 ---
 
 ## Acceptance gates by milestone
 
-### Milestone 1 — visible demo
+### Milestone 1 — visible persisted prototype
 
 Gate:
 
 - landing page renders
-- example route works
-- `POST /draft` returns a normalized preview
-
-### Milestone 2 — persistent core
-
-Gate:
-
-- work items and work versions persist
-- immutable version flow exists
+- examples route works
+- `POST /draft` persists
+- `GET /work/{id}` reads persisted data
 - hashes are stored
 
-### Milestone 3 — reviewable system
+### Milestone 2 — reviewable core
 
 Gate:
 
 - review queue page exists
-- queue jobs are created
-- private flows remain private
+- queueable drafts can be listed for review
+- private security items remain private by default
 
-### Milestone 4 — authenticated internal alpha
+### Milestone 3 — controlled internal alpha
 
 Gate:
 
-- auth middleware works
-- issuer dashboard can be added safely
-- visibility rules are enforced
+- auth middleware exists
+- visibility guards are enforced
+- reviewer flows are explicit
 
 ---
 
@@ -473,49 +453,54 @@ Gate:
 
 ### Repo / tooling
 
-- [ ] Go module initialized
-- [ ] local config scaffolded
-- [ ] migration tool wired
-- [ ] sqlc configured
+- [x] Go module initialized
+- [x] local config scaffolded
+- [x] Nix flake added
+- [ ] migration workflow documented clearly
+- [ ] vendor-hash refresh workflow documented clearly
 
 ### Database
 
-- [ ] core tables created
-- [ ] indexes and constraints added
-- [ ] base seed data available
+- [x] `work_items` table created
+- [x] `work_versions` table created
+- [x] indexes and constraints added
+- [x] migration applies cleanly
+- [ ] follow-on review queue schema added only if needed
 
 ### HTTP surface
 
-- [ ] home page route
-- [ ] health route
-- [ ] draft route
-- [ ] example route
-- [ ] work item show route
+- [x] home page route
+- [x] health route
+- [x] draft route
+- [x] example route
+- [x] work item show route
+- [ ] review queue route
 
 ### Packet pipeline
 
-- [ ] input struct defined
-- [ ] normalization implemented
-- [ ] validation implemented
-- [ ] version creation implemented
+- [x] input struct defined
+- [x] normalization implemented
+- [ ] validation made explicit
+- [x] version create flow implemented
 
 ### Provenance
 
-- [ ] canonical serialization helper
-- [ ] exact hash
-- [ ] quotient projection
-- [ ] quotient hash
+- [x] canonical serialization helper
+- [x] exact hash
+- [x] quotient projection
+- [x] quotient hash
 - [ ] attestation row write
+- [ ] lineage edge write
 
 ### Review
 
-- [ ] queue job table in use
+- [ ] queue state in use
 - [ ] review handler
 - [ ] review template
 
 ### Security / access
 
-- [ ] private-by-default logic for security intake
+- [x] private-by-default logic for security intake
 - [ ] auth middleware
 - [ ] route guards
 - [ ] RLS alignment
@@ -528,37 +513,38 @@ Gate:
 
 Mitigation:
 
-- keep all milestone acceptance based on server-rendered HTML
-- reject work that introduces heavy client frameworks without explicit approval
+- keep milestone acceptance based on server-rendered HTML
+- reject heavy client frameworks unless explicitly approved
+
+### Risk: schema inflation too early
+
+Mitigation:
+
+- keep the schema minimal until a real milestone forces expansion
+- avoid adding speculative tables
 
 ### Risk: provenance becomes hand-wavy
 
 Mitigation:
 
-- require exact and quotient hashes to be stored in DB
-- require at least one attestation row in the create-version flow
-
-### Risk: graph fascination too early
-
-Mitigation:
-
-- represent lineage with adjacency tables first
-- defer Neo4j entirely for this phase
+- keep exact and quotient hashes persisted on create
+- document projection rules clearly
 
 ### Risk: private security data leaks
 
 Mitigation:
 
 - default `private_security` to private visibility
-- make route visibility checks explicit
-- align RLS with app guards
+- keep future visibility checks explicit
+- do not expose reviewer/private paths casually
 
-### Risk: normalization becomes inconsistent
+### Risk: environment churn slows progress
 
 Mitigation:
 
-- keep deterministic packet shaping rules
-- add fixture-based tests around representative inputs
+- keep the app runnable with direct Go commands
+- keep Nix-specific chores separate from app design work
+- automate vendor-hash refresh later instead of letting it block roadmap clarity
 
 ---
 
@@ -567,18 +553,19 @@ Mitigation:
 High-priority tests:
 
 - packet normalization determinism
-- validation failures for bad input
 - exact hash stability
 - quotient projection stability
 - work version immutability
-- private visibility enforcement
-- draft route happy-path rendering
+- create/read DB happy path
+- missing work item 404 behavior
+- private visibility defaulting
+- draft route happy path rendering
 
 Suggested test locations:
 
 - `internal/packets/*_test.go`
-- `internal/provenance/*_test.go`
 - `internal/http/handlers/*_test.go`
+- `internal/provenance/*_test.go`
 
 ---
 
@@ -587,42 +574,41 @@ Suggested test locations:
 These docs should evolve with the code:
 
 - `README.md`
-- `docs/packet-contract.md`
+- `PLAN.md`
 - `docs/provenance-model.md`
-- `docs/auth-model.md`
 - `docs/architecture.md`
 
-If implementation changes meaningfully, update the docs in the same workstream.
+Add these later only when they become real:
+
+- `docs/auth-model.md`
+- `docs/review-flow.md`
 
 ---
 
 ## Immediate next actions
 
-Start with these concrete files:
+From the current state, the shortest useful path is:
 
-1. `cmd/web/main.go`
-2. `internal/app/config.go`
-3. `internal/app/routes.go`
-4. `db/migrations/0001_init.sql`
-5. `db/sqlc.yaml`
-6. `internal/packets/types.go`
-7. `internal/http/handlers/drafts.go`
-8. `internal/views/home.tmpl`
-
-These provide the shortest path to a visible, persistent, reviewable core.
+1. make `GET /` a real server-rendered intake form if it is still placeholder-heavy
+2. add tests around persisted create/read flow
+3. add the minimal review queue page
+4. wire persisted `DATABASE_URL` into deployment secrets
+5. deploy the persisted version cleanly
+6. only then add auth / visibility controls
 
 ---
 
 ## Summary
 
-This plan builds the smallest serious version of Bountystash.
-It favors:
+Bountystash now has a real thin core:
 
-- thin HTML-first delivery
-- relational clarity
-- immutable packets
-- concrete provenance
-- private-by-default security handling
+- HTML-first
+- Postgres-backed
+- immutable versioned packets
+- stored hashes
+- private-by-default security intake behavior
 
-Ship the core first.
+The next work should deepen the core, not widen the scope.
+
+Ship the reviewable persisted system first.
 Do the fancy stuff later only if the core proves itself.
