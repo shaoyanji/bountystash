@@ -24,7 +24,8 @@
 
         # First build will fail with the real hash. Replace fakeHash
         # with the value printed by nix build.
-        vendorHash = "sha256-SmtR/uqEv56LfDZGRxgH4XbG9xvxTntVBIWnTey00GU=";
+        vendorHash = "sha256-MCbuaf7FSNDhNJAQxyT6DSGPy7zbYlKGrya2FWaC8x8=";
+        # vendorHash = pkgs.lib.fakeHash;
 
         env = {
           CGO_ENABLED = "0";
