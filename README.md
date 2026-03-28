@@ -12,7 +12,7 @@ Current product shape:
 - Minimal reviewer queue surface
 - Keyboard-first terminal client over HTTP (`cmd/bountystash-tui`)
 
-Current release target: `0.1.2`.
+Current release target: `0.1.3`.
 
 ## Current Milestone Scope
 
@@ -91,10 +91,20 @@ TUI keys:
 - `r` review queue (private security separated)
 - `c` create draft
 - `Enter` inspect selected item
+- `Esc` back from inspect/create
+- `Tab` / `Shift+Tab` move create focus
+- `Left` / `Right` cycle create `kind` / `visibility` when focused
 - `Ctrl+S` submit draft in create mode
 - `Ctrl+L` reload backend data
 - `?` help overlay
 - `q` quit
+
+TUI flow notes:
+
+- Browse/review lists are sectioned and include explicit empty-state messaging.
+- `Enter` opens a focused inspect mode that shows normalized packet fields, hashes, and status metadata when available.
+- Create success opens inspect mode for the newly created work item and surfaces the new work item ID in the footer.
+- Validation, API, timeout/unavailable, and invalid-response errors are surfaced with distinct messages in the footer.
 
 ## Build and Verify
 

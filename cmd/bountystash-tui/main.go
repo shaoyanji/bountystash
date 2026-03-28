@@ -2,9 +2,13 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
+	"net"
+	neturl "net/url"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -24,17 +28,19 @@ import (
 type mode string
 
 const (
-	modeBrowse mode = "browse"
-	modeReview mode = "review"
-	modeCreate mode = "create"
+	modeBrowse  mode = "browse"
+	modeReview  mode = "review"
+	modeCreate  mode = "create"
+	modeInspect mode = "inspect"
 )
 
 type browseItem struct {
-	title  string
-	desc   string
-	kind   string
-	source string
-	id     string
+	title      string
+	desc       string
+	kind       string
+	source     string
+	id         string
+	selectable bool
 }
 
 func (i browseItem) Title() string       { return i.title }
@@ -42,10 +48,10 @@ func (i browseItem) Description() string { return i.desc }
 func (i browseItem) FilterValue() string { return i.title + " " + i.desc + " " + i.kind }
 
 type reviewItem struct {
-	title       string
-	desc        string
-	id          string
-	isSensitive bool
+	title      string
+	desc       string
+	id         string
+	selectable bool
 }
 
 func (i reviewItem) Title() string       { return i.title }
@@ -73,8 +79,9 @@ type reviewMsg struct {
 }
 
 type detailMsg struct {
-	text string
-	err  error
+	title string
+	text  string
+	err   error
 }
 
 type draftCreateMsg struct {
@@ -87,9 +94,13 @@ type model struct {
 	baseURL  string
 	noColor  bool
 	mode     mode
+	prevMode mode
 	showHelp bool
-	errMsg   string
-	status   string
+
+	status         string
+	statusMsg      string
+	errMsg         string
+	pendingRefresh int
 
 	width  int
 	height int
@@ -98,9 +109,10 @@ type model struct {
 	work     []handlers.WorkListRow
 	review   clientapi.ReviewQueue
 
-	browseList list.Model
-	reviewList list.Model
-	detail     string
+	browseList  list.Model
+	reviewList  list.Model
+	detailTitle string
+	detail      string
 
 	titleInput      textinput.Model
 	rewardInput     textinput.Model
@@ -159,7 +171,10 @@ func initialModel(api clientapi.Client, baseURL string, noColor bool) model {
 		baseURL:         baseURL,
 		noColor:         noColor,
 		mode:            modeBrowse,
+		prevMode:        modeBrowse,
 		status:          "loading",
+		statusMsg:       "initializing",
+		pendingRefresh:  4,
 		browseList:      browse,
 		reviewList:      review,
 		titleInput:      title,
@@ -206,53 +221,74 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.showHelp = false
 			m.setCreateFocus(m.createFocus)
 			return m, nil
+		case "esc":
+			if m.mode == modeInspect {
+				m.mode = m.prevMode
+				return m, nil
+			}
+			if m.mode == modeCreate {
+				m.mode = modeBrowse
+				return m, nil
+			}
 		case "?":
 			m.showHelp = !m.showHelp
 			return m, nil
 		case "ctrl+l":
+			m.statusMsg = "refreshing"
+			m.pendingRefresh = 4
 			return m, tea.Batch(fetchHealthCmd(m.api), fetchExamplesCmd(m.api), fetchWorkCmd(m.api), fetchReviewCmd(m.api))
 		}
 	}
 
 	switch msg := msg.(type) {
 	case healthMsg:
+		m.consumeRefresh()
 		if msg.err != nil {
 			m.status = "down"
-			m.errMsg = msg.err.Error()
+			m.setError("health", msg.err)
 		} else {
 			m.status = msg.status
+			m.statusMsg = "health check ok"
 		}
 		return m, nil
 	case examplesMsg:
+		m.consumeRefresh()
 		if msg.err != nil {
-			m.errMsg = msg.err.Error()
+			m.setError("examples", msg.err)
 			return m, nil
 		}
 		m.examples = msg.items
 		m.refreshBrowseItems()
+		m.statusMsg = "examples loaded"
 		return m, nil
 	case workListMsg:
+		m.consumeRefresh()
 		if msg.err != nil {
-			m.errMsg = msg.err.Error()
+			m.setError("work list", msg.err)
 			return m, nil
 		}
 		m.work = msg.items
 		m.refreshBrowseItems()
+		m.statusMsg = "work list loaded"
 		return m, nil
 	case reviewMsg:
+		m.consumeRefresh()
 		if msg.err != nil {
-			m.errMsg = msg.err.Error()
+			m.setError("review queue", msg.err)
 			return m, nil
 		}
 		m.review = msg.queue
 		m.refreshReviewItems()
+		m.statusMsg = "review queue loaded"
 		return m, nil
 	case detailMsg:
 		if msg.err != nil {
-			m.errMsg = msg.err.Error()
+			m.setError("inspect", msg.err)
 			return m, nil
 		}
+		m.detailTitle = msg.title
 		m.detail = msg.text
+		m.statusMsg = "inspect ready"
 		m.errMsg = ""
 		return m, nil
 	case draftCreateMsg:
@@ -260,12 +296,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if apiErr, ok := msg.err.(*clientapi.APIError); ok && len(apiErr.ValidationErrors) > 0 {
 				m.errMsg = formatValidationErrors(apiErr.ValidationErrors)
 			} else {
-				m.errMsg = msg.err.Error()
+				m.setError("create draft", msg.err)
 			}
 			return m, nil
 		}
 		m.lastCreatedID = msg.result.ID
 		m.errMsg = ""
+		m.detailTitle = "Created Work Item"
 		m.detail = formatWorkDetail(handlers.WorkDetail{
 			ID:           msg.result.ID,
 			Status:       msg.result.Status,
@@ -274,7 +311,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			QuotientHash: msg.result.QuotientHash,
 			Packet:       msg.result.Packet,
 		})
-		m.mode = modeBrowse
+		m.prevMode = modeBrowse
+		m.mode = modeInspect
+		m.statusMsg = "draft created"
 		m.clearCreateForm()
 		return m, tea.Batch(fetchWorkCmd(m.api), fetchReviewCmd(m.api))
 	}
@@ -285,9 +324,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.browseList = updated
 		if keyMsg, ok := msg.(tea.KeyMsg); ok && keyMsg.String() == "enter" {
 			item, ok := m.browseList.SelectedItem().(browseItem)
-			if !ok {
+			if !ok || !item.selectable {
+				m.statusMsg = "select a work item or example to inspect"
 				return m, nil
 			}
+			m.prevMode = modeBrowse
+			m.mode = modeInspect
+			m.detailTitle = "Loading Inspect View"
+			m.detail = "Loading details..."
 			if item.source == "example" {
 				return m, fetchExampleDetailCmd(m.api, item.id)
 			}
@@ -299,14 +343,21 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.reviewList = updated
 		if keyMsg, ok := msg.(tea.KeyMsg); ok && keyMsg.String() == "enter" {
 			item, ok := m.reviewList.SelectedItem().(reviewItem)
-			if !ok {
+			if !ok || !item.selectable {
+				m.statusMsg = "select a review item to inspect"
 				return m, nil
 			}
+			m.prevMode = modeReview
+			m.mode = modeInspect
+			m.detailTitle = "Loading Inspect View"
+			m.detail = "Loading details..."
 			return m, fetchWorkDetailCmd(m.api, item.id)
 		}
 		return m, cmd
 	case modeCreate:
 		return m.updateCreate(msg)
+	case modeInspect:
+		return m, nil
 	default:
 		return m, nil
 	}
@@ -324,11 +375,13 @@ func (m model) View() string {
 }
 
 func (m model) renderHeader() string {
-	status := "backend: " + m.status
+	status := "health: " + m.status
 	if !m.noColor && m.status == "ok" {
 		status = lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Render(status)
+	} else if !m.noColor && m.status == "down" {
+		status = lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render(status)
 	}
-	return "Bountystash TUI " + version.Short() + " | " + status + " | " + m.baseURL
+	return "Bountystash TUI " + version.Short() + " | backend: " + m.baseURL + " | " + status + " | mode: " + string(m.mode)
 }
 
 func (m model) renderMain() string {
@@ -339,12 +392,21 @@ func (m model) renderMain() string {
 		return m.renderSplit("Review", m.reviewList.View())
 	case modeCreate:
 		return m.renderCreate()
+	case modeInspect:
+		return m.renderInspect()
 	default:
 		return "unknown mode"
 	}
 }
 
 func (m model) renderSplit(title string, left string) string {
+	if title == "Browse" && len(m.browseList.Items()) == 0 {
+		left = left + "\n\nNo examples or work items available."
+	}
+	if title == "Review" && len(m.reviewList.Items()) == 0 {
+		left = left + "\n\nReview queue is empty."
+	}
+
 	right := m.detail
 	if strings.TrimSpace(right) == "" {
 		right = "Select an item and press Enter to inspect."
@@ -357,17 +419,36 @@ func (m model) renderSplit(title string, left string) string {
 	return lipgloss.JoinHorizontal(lipgloss.Top, leftPane, " | ", rightPane)
 }
 
+func (m model) renderInspect() string {
+	if strings.TrimSpace(m.detail) == "" {
+		return "Inspect\n\nNo detail loaded yet."
+	}
+
+	var b strings.Builder
+	title := strings.TrimSpace(m.detailTitle)
+	if title == "" {
+		title = "Inspect"
+	}
+	b.WriteString(title)
+	b.WriteString("\n")
+	b.WriteString(strings.Repeat("-", max(10, min(60, m.width-2))))
+	b.WriteString("\n")
+	b.WriteString(m.detail)
+	b.WriteString("\n\nEsc: back")
+	return b.String()
+}
+
 func (m model) renderCreate() string {
 	var b strings.Builder
-	b.WriteString("Create Draft\n")
+	b.WriteString("Create Draft (Ctrl+S submit, Esc back)\n")
 	b.WriteString(fmt.Sprintf("%s %s\n", m.focusLabel(0, "Title"), m.titleInput.View()))
 	b.WriteString(fmt.Sprintf("%s %s\n", m.focusLabel(1, "Kind"), kinds[m.kindIndex]))
 	b.WriteString(fmt.Sprintf("%s %s\n", m.focusLabel(2, "Visibility"), visibilities[m.visibilityIndex]))
-	b.WriteString(fmt.Sprintf("%s %s\n", m.focusLabel(3, "Reward"), m.rewardInput.View()))
+	b.WriteString(fmt.Sprintf("%s %s\n", m.focusLabel(3, "Reward Model"), m.rewardInput.View()))
 	b.WriteString(fmt.Sprintf("%s\n%s\n", m.focusLabel(4, "Scope"), m.scopeInput.View()))
 	b.WriteString(fmt.Sprintf("%s\n%s\n", m.focusLabel(5, "Deliverables"), m.delivInput.View()))
-	b.WriteString(fmt.Sprintf("%s\n%s\n", m.focusLabel(6, "Acceptance"), m.acceptInput.View()))
-	b.WriteString("Submit: Ctrl+S")
+	b.WriteString(fmt.Sprintf("%s\n%s\n", m.focusLabel(6, "Acceptance Criteria"), m.acceptInput.View()))
+	b.WriteString("Tab/Shift+Tab: focus field | Left/Right: cycle kind and visibility")
 	return b.String()
 }
 
@@ -380,60 +461,80 @@ func (m model) focusLabel(idx int, name string) string {
 }
 
 func (m model) renderFooter() string {
-	errText := m.errMsg
-	if errText == "" && m.lastCreatedID != "" {
-		errText = "created work item: " + m.lastCreatedID
+	if m.errMsg != "" {
+		return fmt.Sprintf("mode=%s | ERROR: %s", m.mode, m.errMsg)
 	}
-	if errText == "" {
-		errText = "Press ? for help"
+	status := m.statusMsg
+	if status == "" && m.lastCreatedID != "" {
+		status = "created work item: " + m.lastCreatedID
 	}
-	return fmt.Sprintf("mode=%s | %s", m.mode, errText)
+	if status == "" {
+		status = "ready"
+	}
+	if m.pendingRefresh > 0 {
+		status = status + fmt.Sprintf(" | loading: %d", m.pendingRefresh)
+	}
+	return fmt.Sprintf("mode=%s | %s | keys: ? help", m.mode, status)
 }
 
 func (m model) renderHelp() string {
-	return "Keys: b browse | r review | c create | Enter inspect | Tab/Shift+Tab cycle create fields | Ctrl+S submit | Ctrl+L reload | q quit"
+	return strings.Join([]string{
+		"Global: b browse | r review | c create | ? help | Ctrl+L reload | q quit",
+		"Browse/Review: Up/Down move | Enter inspect selected item",
+		"Inspect: Esc back",
+		"Create: Tab/Shift+Tab focus | Left/Right cycle kind/visibility | Ctrl+S submit | Esc back",
+	}, "\n")
 }
 
 func (m *model) refreshBrowseItems() {
-	items := make([]list.Item, 0, len(m.examples)+len(m.work))
+	items := make([]list.Item, 0, len(m.examples)+len(m.work)+2)
+	items = append(items, browseItem{title: "Examples", source: "section", selectable: false})
 	for _, ex := range m.examples {
 		items = append(items, browseItem{
-			title:  "example/" + ex.Slug,
-			desc:   string(ex.Kind) + " · " + string(ex.Visibility),
-			kind:   string(ex.Kind),
-			source: "example",
-			id:     ex.Slug,
+			title:      "[example] " + ex.Title,
+			desc:       ex.Slug + " · " + string(ex.Kind) + " · " + string(ex.Visibility),
+			kind:       string(ex.Kind),
+			source:     "example",
+			id:         ex.Slug,
+			selectable: true,
 		})
 	}
+	items = append(items, browseItem{title: "Recent Work Items", source: "section", selectable: false})
 	for _, w := range m.work {
 		items = append(items, browseItem{
-			title:  w.Title,
-			desc:   w.ID + " · " + string(w.Kind) + " · " + string(w.Visibility),
-			kind:   string(w.Kind),
-			source: "work",
-			id:     w.ID,
+			title:      "[work] " + w.Title,
+			desc:       w.ID + " · " + string(w.Kind) + " · " + string(w.Visibility) + " · " + w.Status,
+			kind:       string(w.Kind),
+			source:     "work",
+			id:         w.ID,
+			selectable: true,
 		})
 	}
+	m.browseList.Title = fmt.Sprintf("Browse (%d examples, %d work)", len(m.examples), len(m.work))
 	m.browseList.SetItems(items)
 }
 
 func (m *model) refreshReviewItems() {
-	items := make([]list.Item, 0, len(m.review.Standard)+len(m.review.Private))
+	items := make([]list.Item, 0, len(m.review.Standard)+len(m.review.Private)+2)
+	items = append(items, reviewItem{title: "Standard Review Queue", selectable: false})
 	for _, row := range m.review.Standard {
 		items = append(items, reviewItem{
-			title: row.Title,
-			desc:  row.ID + " · " + string(row.Kind) + " · " + row.Status,
-			id:    row.ID,
+			title:      row.Title,
+			desc:       row.ID + " · " + string(row.Kind) + " · " + row.Status,
+			id:         row.ID,
+			selectable: true,
 		})
 	}
+	items = append(items, reviewItem{title: "Private Security Queue", selectable: false})
 	for _, row := range m.review.Private {
 		items = append(items, reviewItem{
-			title:       "[private_security] " + row.Title,
-			desc:        row.ID + " · " + string(row.Kind) + " · " + row.Status,
-			id:          row.ID,
-			isSensitive: true,
+			title:      "[private_security] " + row.Title,
+			desc:       row.ID + " · " + string(row.Kind) + " · " + row.Status + " · restricted",
+			id:         row.ID,
+			selectable: true,
 		})
 	}
+	m.reviewList.Title = fmt.Sprintf("Review (%d standard, %d private)", len(m.review.Standard), len(m.review.Private))
 	m.reviewList.SetItems(items)
 }
 
@@ -474,6 +575,7 @@ func (m model) updateCreate(msg tea.Msg) (tea.Model, tea.Cmd) {
 				RewardModel:        m.rewardInput.Value(),
 				Visibility:         visibilities[m.visibilityIndex],
 			}
+			m.statusMsg = "submitting draft"
 			return m, createDraftCmd(m.api, input)
 		}
 	}
@@ -569,7 +671,10 @@ func fetchExampleDetailCmd(api clientapi.Client, slug string) tea.Cmd {
 		if err != nil {
 			return detailMsg{err: err}
 		}
-		return detailMsg{text: formatExampleDetail(example)}
+		return detailMsg{
+			title: "Example: " + example.Slug,
+			text:  formatExampleDetail(example),
+		}
 	}
 }
 
@@ -579,7 +684,10 @@ func fetchWorkDetailCmd(api clientapi.Client, id string) tea.Cmd {
 		if err != nil {
 			return detailMsg{err: err}
 		}
-		return detailMsg{text: formatWorkDetail(work)}
+		return detailMsg{
+			title: "Work Item: " + work.ID,
+			text:  formatWorkDetail(work),
+		}
 	}
 }
 
@@ -591,15 +699,23 @@ func createDraftCmd(api clientapi.Client, input packets.DraftInput) tea.Cmd {
 }
 
 func formatExampleDetail(ex handlers.Example) string {
-	return "Example: " + ex.Slug + "\n\n" + formatPacket(ex.Packet)
+	return strings.Join([]string{
+		"Example Slug: " + ex.Slug,
+		"",
+		formatPacket(ex.Packet),
+	}, "\n")
 }
 
 func formatWorkDetail(work handlers.WorkDetail) string {
+	created := "(not available)"
+	if !work.CreatedAt.IsZero() {
+		created = work.CreatedAt.Format(time.RFC3339)
+	}
 	return strings.Join([]string{
-		"Work Item: " + work.ID,
+		"Work Item ID: " + work.ID,
 		"Status: " + work.Status,
 		"Version: " + strconv.Itoa(work.Version),
-		"Created: " + work.CreatedAt.Format(time.RFC3339),
+		"Created At: " + created,
 		"Exact Hash: " + work.ExactHash,
 		"Quotient Hash: " + work.QuotientHash,
 		"",
@@ -612,13 +728,16 @@ func formatPacket(p packets.NormalizedPacket) string {
 		"Title: " + p.Title,
 		"Kind: " + string(p.Kind),
 		"Visibility: " + string(p.Visibility),
-		"Reward: " + p.RewardModel,
+		"Reward Model: " + p.RewardModel,
 		"",
-		"Scope:\n" + bulletLines(p.Scope),
+		"Scope",
+		bulletLines(p.Scope),
 		"",
-		"Deliverables:\n" + bulletLines(p.Deliverables),
+		"Deliverables",
+		bulletLines(p.Deliverables),
 		"",
-		"Acceptance:\n" + bulletLines(p.AcceptanceCriteria),
+		"Acceptance Criteria",
+		bulletLines(p.AcceptanceCriteria),
 	}, "\n")
 }
 
@@ -637,11 +756,16 @@ func formatValidationErrors(errs packets.ValidationErrors) string {
 	if len(errs) == 0 {
 		return ""
 	}
-	lines := make([]string, 0, len(errs))
-	for field, msg := range errs {
-		lines = append(lines, field+": "+msg)
+	keys := make([]string, 0, len(errs))
+	for field := range errs {
+		keys = append(keys, field)
 	}
-	return strings.Join(lines, " | ")
+	sort.Strings(keys)
+	lines := make([]string, 0, len(keys))
+	for _, field := range keys {
+		lines = append(lines, field+": "+errs[field])
+	}
+	return "validation failed: " + strings.Join(lines, " | ")
 }
 
 func max(a, b int) int {
@@ -649,6 +773,59 @@ func max(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func (m *model) consumeRefresh() {
+	if m.pendingRefresh <= 0 {
+		return
+	}
+	m.pendingRefresh--
+	if m.pendingRefresh == 0 {
+		m.statusMsg = "refresh complete"
+	}
+}
+
+func (m *model) setError(contextLabel string, err error) {
+	m.errMsg = contextLabel + ": " + describeError(err)
+}
+
+func describeError(err error) string {
+	if err == nil {
+		return ""
+	}
+	var apiErr *clientapi.APIError
+	if errors.As(err, &apiErr) {
+		if len(apiErr.ValidationErrors) > 0 {
+			return formatValidationErrors(apiErr.ValidationErrors)
+		}
+		return fmt.Sprintf("api error (%d): %s", apiErr.StatusCode, apiErr.Message)
+	}
+	var urlErr *neturl.Error
+	if errors.As(err, &urlErr) {
+		if urlErr.Timeout() {
+			return "request timeout; backend may be unavailable"
+		}
+		return "backend unavailable: " + urlErr.Err.Error()
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return "request timeout; backend may be unavailable"
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return "request timeout; backend may be unavailable"
+	}
+	msg := err.Error()
+	if strings.Contains(strings.ToLower(msg), "invalid json") {
+		return "invalid response from backend"
+	}
+	return msg
 }
 
 func resolveBaseURL(flagValue string) string {

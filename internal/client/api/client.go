@@ -168,34 +168,40 @@ func (c *HTTPClient) CreateDraft(ctx context.Context, input packets.DraftInput) 
 func (c *HTTPClient) get(ctx context.Context, path string, out any) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+path, nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("build request %s: %w", path, err)
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return err
+		return fmt.Errorf("request GET %s: %w", path, err)
 	}
 	defer resp.Body.Close()
-	return decodeResponse(resp, out)
+	if err := decodeResponse(resp, out); err != nil {
+		return fmt.Errorf("decode GET %s: %w", path, err)
+	}
+	return nil
 }
 
 func (c *HTTPClient) post(ctx context.Context, path string, body any, out any) error {
 	payload, err := json.Marshal(body)
 	if err != nil {
-		return err
+		return fmt.Errorf("encode request body %s: %w", path, err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, bytes.NewReader(payload))
 	if err != nil {
-		return err
+		return fmt.Errorf("build request %s: %w", path, err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return err
+		return fmt.Errorf("request POST %s: %w", path, err)
 	}
 	defer resp.Body.Close()
-	return decodeResponse(resp, out)
+	if err := decodeResponse(resp, out); err != nil {
+		return fmt.Errorf("decode POST %s: %w", path, err)
+	}
+	return nil
 }
 
 func decodeResponse(resp *http.Response, out any) error {
@@ -223,5 +229,8 @@ func decodeResponse(resp *http.Response, out any) error {
 	if out == nil {
 		return nil
 	}
-	return json.NewDecoder(resp.Body).Decode(out)
+	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+		return fmt.Errorf("invalid JSON response: %w", err)
+	}
+	return nil
 }
