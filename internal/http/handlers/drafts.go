@@ -27,19 +27,37 @@ type DraftHandler struct {
 	workShowTemplate *template.Template
 }
 
+type DraftCreateResult struct {
+	ID           string                   `json:"id"`
+	Status       string                   `json:"status"`
+	Version      int                      `json:"version"`
+	ExactHash    string                   `json:"exact_hash"`
+	QuotientHash string                   `json:"quotient_hash"`
+	Packet       packets.NormalizedPacket `json:"packet"`
+}
+
+type WorkDetail struct {
+	ID           string                   `json:"id"`
+	Status       string                   `json:"status"`
+	CreatedAt    time.Time                `json:"created_at"`
+	Version      int                      `json:"version"`
+	ExactHash    string                   `json:"exact_hash"`
+	QuotientHash string                   `json:"quotient_hash"`
+	Packet       packets.NormalizedPacket `json:"packet"`
+}
+
+type WorkListRow struct {
+	ID         string             `json:"id"`
+	Title      string             `json:"title"`
+	Kind       packets.Kind       `json:"kind"`
+	Visibility packets.Visibility `json:"visibility"`
+	Status     string             `json:"status"`
+	CreatedAt  time.Time          `json:"created_at"`
+}
+
 type homeData struct {
 	Input  packets.DraftInput
 	Errors map[string]string
-}
-
-type workShowData struct {
-	ID           string
-	Status       string
-	CreatedAt    time.Time
-	Version      int
-	ExactHash    string
-	QuotientHash string
-	Packet       packets.NormalizedPacket
 }
 
 func NewDraftHandler(db *sql.DB) (*DraftHandler, error) {
@@ -88,7 +106,7 @@ func (h *DraftHandler) HandleDraftPost(w http.ResponseWriter, r *http.Request) {
 		Visibility:         r.FormValue("visibility"),
 	}
 
-	validationErrors := packets.ValidateDraftInput(input)
+	result, validationErrors, err := h.CreateDraft(r.Context(), input)
 	if !validationErrors.Empty() {
 		h.renderHome(w, homeData{
 			Input:  input,
@@ -96,15 +114,12 @@ func (h *DraftHandler) HandleDraftPost(w http.ResponseWriter, r *http.Request) {
 		}, http.StatusBadRequest)
 		return
 	}
-
-	normalized := packets.NormalizeDraft(input)
-	workID, err := h.insertDraft(r.Context(), normalized)
 	if err != nil {
 		http.Error(w, "failed to persist draft", http.StatusInternalServerError)
 		return
 	}
 
-	http.Redirect(w, r, "/work/"+workID, http.StatusSeeOther)
+	http.Redirect(w, r, "/work/"+result.ID, http.StatusSeeOther)
 }
 
 func (h *DraftHandler) HandleWorkShow(w http.ResponseWriter, r *http.Request) {
@@ -114,7 +129,7 @@ func (h *DraftHandler) HandleWorkShow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := h.fetchCurrentPacket(r.Context(), id)
+	data, err := h.FetchCurrentPacket(r.Context(), id)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			http.NotFound(w, r)
@@ -191,12 +206,39 @@ func (h *DraftHandler) insertDraft(ctx context.Context, normalized packets.Norma
 	return workID, nil
 }
 
-func (h *DraftHandler) fetchCurrentPacket(ctx context.Context, workID string) (workShowData, error) {
+func (h *DraftHandler) CreateDraft(ctx context.Context, input packets.DraftInput) (DraftCreateResult, packets.ValidationErrors, error) {
+	validationErrors := packets.ValidateDraftInput(input)
+	if !validationErrors.Empty() {
+		return DraftCreateResult{}, validationErrors, nil
+	}
+
+	normalized := packets.NormalizeDraft(input)
+	workID, err := h.insertDraft(ctx, normalized)
+	if err != nil {
+		return DraftCreateResult{}, packets.ValidationErrors{}, err
+	}
+
+	work, err := h.FetchCurrentPacket(ctx, workID)
+	if err != nil {
+		return DraftCreateResult{}, packets.ValidationErrors{}, err
+	}
+
+	return DraftCreateResult{
+		ID:           work.ID,
+		Status:       work.Status,
+		Version:      work.Version,
+		ExactHash:    work.ExactHash,
+		QuotientHash: work.QuotientHash,
+		Packet:       work.Packet,
+	}, packets.ValidationErrors{}, nil
+}
+
+func (h *DraftHandler) FetchCurrentPacket(ctx context.Context, workID string) (WorkDetail, error) {
 	var (
 		kind         string
 		visibility   string
 		packetJSON   []byte
-		data         workShowData
+		data         WorkDetail
 		packetStatus string
 	)
 
@@ -218,12 +260,12 @@ func (h *DraftHandler) fetchCurrentPacket(ctx context.Context, workID string) (w
 		&packetJSON,
 	)
 	if err != nil {
-		return workShowData{}, err
+		return WorkDetail{}, err
 	}
 
 	var packet packets.NormalizedPacket
 	if err := json.Unmarshal(packetJSON, &packet); err != nil {
-		return workShowData{}, err
+		return WorkDetail{}, err
 	}
 	packet.Kind = packets.Kind(kind)
 	packet.Visibility = packets.Visibility(visibility)
@@ -232,6 +274,49 @@ func (h *DraftHandler) fetchCurrentPacket(ctx context.Context, workID string) (w
 	data.Status = packetStatus
 	data.Packet = packet
 	return data, nil
+}
+
+func (h *DraftHandler) FetchRecentWork(ctx context.Context, limit int) ([]WorkListRow, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 25
+	}
+
+	rows, err := h.db.QueryContext(ctx, `
+		SELECT wi.id, wi.kind, wi.visibility, wi.status, wi.created_at, wv.packet
+		FROM work_items AS wi
+		JOIN work_versions AS wv
+		  ON wv.work_item_id = wi.id
+		 AND wv.id = wi.current_version_id
+		ORDER BY wi.created_at DESC
+		LIMIT $1
+	`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]WorkListRow, 0, limit)
+	for rows.Next() {
+		var (
+			row       WorkListRow
+			packet    packets.NormalizedPacket
+			rawPacket []byte
+		)
+		if err := rows.Scan(&row.ID, &row.Kind, &row.Visibility, &row.Status, &row.CreatedAt, &rawPacket); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(rawPacket, &packet); err != nil {
+			return nil, err
+		}
+		row.Title = packet.Title
+		out = append(out, row)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return out, nil
 }
 
 // canonicalJSON is hash material for exact packet provenance.

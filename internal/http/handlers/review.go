@@ -18,7 +18,7 @@ type ReviewHandler struct {
 	standardLimit int
 }
 
-type reviewRow struct {
+type ReviewRow struct {
 	ID         string
 	Title      string
 	Kind       packets.Kind
@@ -27,9 +27,9 @@ type reviewRow struct {
 	CreatedAt  time.Time
 }
 
-type reviewQueueData struct {
-	Standard []reviewRow
-	Private  []reviewRow
+type ReviewQueueData struct {
+	Standard []ReviewRow
+	Private  []ReviewRow
 }
 
 func NewReviewHandler(db *sql.DB) (*ReviewHandler, error) {
@@ -46,15 +46,27 @@ func NewReviewHandler(db *sql.DB) (*ReviewHandler, error) {
 }
 
 func (h *ReviewHandler) HandleQueue(w http.ResponseWriter, r *http.Request) {
-	rows, err := h.fetchQueueRows(r.Context())
+	data, err := h.FetchQueue(r.Context())
 	if err != nil {
 		http.Error(w, "load review queue", http.StatusInternalServerError)
 		return
 	}
 
-	data := reviewQueueData{
-		Standard: make([]reviewRow, 0, len(rows)),
-		Private:  make([]reviewRow, 0, len(rows)),
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := h.reviewTmpl.ExecuteTemplate(w, "layout", data); err != nil {
+		http.Error(w, "template render error", http.StatusInternalServerError)
+	}
+}
+
+func (h *ReviewHandler) FetchQueue(ctx context.Context) (ReviewQueueData, error) {
+	rows, err := h.fetchQueueRows(ctx)
+	if err != nil {
+		return ReviewQueueData{}, err
+	}
+
+	data := ReviewQueueData{
+		Standard: make([]ReviewRow, 0, len(rows)),
+		Private:  make([]ReviewRow, 0, len(rows)),
 	}
 	for _, row := range rows {
 		if row.Kind == packets.KindPrivateSecurity {
@@ -64,13 +76,10 @@ func (h *ReviewHandler) HandleQueue(w http.ResponseWriter, r *http.Request) {
 		data.Standard = append(data.Standard, row)
 	}
 
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := h.reviewTmpl.ExecuteTemplate(w, "layout", data); err != nil {
-		http.Error(w, "template render error", http.StatusInternalServerError)
-	}
+	return data, nil
 }
 
-func (h *ReviewHandler) fetchQueueRows(ctx context.Context) ([]reviewRow, error) {
+func (h *ReviewHandler) fetchQueueRows(ctx context.Context) ([]ReviewRow, error) {
 	rows, err := h.db.QueryContext(ctx, `
 		SELECT wi.id, wi.kind, wi.visibility, wi.status, wi.created_at, wv.packet
 		FROM work_items AS wi
@@ -86,10 +95,10 @@ func (h *ReviewHandler) fetchQueueRows(ctx context.Context) ([]reviewRow, error)
 	}
 	defer rows.Close()
 
-	out := make([]reviewRow, 0, h.standardLimit)
+	out := make([]ReviewRow, 0, h.standardLimit)
 	for rows.Next() {
 		var (
-			row       reviewRow
+			row       ReviewRow
 			packet    packets.NormalizedPacket
 			rawPacket []byte
 		)

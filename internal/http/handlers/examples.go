@@ -18,6 +18,11 @@ type exampleShowData struct {
 	Packet packets.NormalizedPacket
 }
 
+type Example struct {
+	Slug   string                   `json:"slug"`
+	Packet packets.NormalizedPacket `json:"packet"`
+}
+
 // HandleExampleShow renders one seeded example packet by slug.
 func HandleExampleShow(w http.ResponseWriter, r *http.Request) {
 	slug := strings.TrimSpace(chi.URLParam(r, "slug"))
@@ -36,69 +41,82 @@ func HandleExampleShow(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func seededExampleBySlug(slug string) (packets.NormalizedPacket, bool) {
-	switch slug {
-	case "auth-loop":
-		return packets.NormalizedPacket{
-			Title: "Fix recurring auth session loop in dashboard",
-			Kind:  packets.KindBounty,
-			Scope: []string{
-				"Reproduce session refresh loop on stale tokens",
-				"Patch middleware refresh flow",
-				"Add regression checks for login redirect cycle",
+func SeededExamples() []Example {
+	return []Example{
+		{
+			Slug: "auth-loop",
+			Packet: packets.NormalizedPacket{
+				Title: "Fix recurring auth session loop in dashboard",
+				Kind:  packets.KindBounty,
+				Scope: []string{
+					"Reproduce session refresh loop on stale tokens",
+					"Patch middleware refresh flow",
+					"Add regression checks for login redirect cycle",
+				},
+				Deliverables: []string{
+					"Code patch with root-cause note",
+					"Test coverage for auth refresh path",
+				},
+				AcceptanceCriteria: []string{
+					"User remains authenticated after token refresh",
+					"No infinite redirect between login and dashboard",
+				},
+				RewardModel: "Fixed bounty: USD 1,500",
+				Visibility:  packets.VisibilityPublic,
 			},
-			Deliverables: []string{
-				"Code patch with root-cause note",
-				"Test coverage for auth refresh path",
+		},
+		{
+			Slug: "webhook-rfq",
+			Packet: packets.NormalizedPacket{
+				Title: "RFQ: webhook reliability hardening package",
+				Kind:  packets.KindRFQ,
+				Scope: []string{
+					"Delivery retry policy with backoff",
+					"Signature verification baseline",
+					"Failure replay process",
+				},
+				Deliverables: []string{
+					"Firm quote with timeline",
+					"Implementation plan and assumptions",
+				},
+				AcceptanceCriteria: []string{
+					"Quoted scope covers retry, signature, and replay",
+					"Includes rollout and validation steps",
+				},
+				RewardModel: "Quoted engagement",
+				Visibility:  packets.VisibilityPublic,
 			},
-			AcceptanceCriteria: []string{
-				"User remains authenticated after token refresh",
-				"No infinite redirect between login and dashboard",
+		},
+		{
+			Slug: "pipeline-rfp",
+			Packet: packets.NormalizedPacket{
+				Title: "RFP: modernize CI pipeline for multi-service releases",
+				Kind:  packets.KindRFP,
+				Scope: []string{
+					"Current-state CI assessment",
+					"Proposed target architecture",
+					"Migration approach with risk controls",
+				},
+				Deliverables: []string{
+					"Formal proposal document",
+					"Milestone plan and staffing model",
+				},
+				AcceptanceCriteria: []string{
+					"Proposal includes implementation and ownership boundaries",
+					"Risk, rollback, and delivery timeline are explicit",
+				},
+				RewardModel: "Proposal-based selection",
+				Visibility:  packets.VisibilityPublic,
 			},
-			RewardModel: "Fixed bounty: USD 1,500",
-			Visibility:  packets.VisibilityPublic,
-		}, true
-	case "webhook-rfq":
-		return packets.NormalizedPacket{
-			Title: "RFQ: webhook reliability hardening package",
-			Kind:  packets.KindRFQ,
-			Scope: []string{
-				"Delivery retry policy with backoff",
-				"Signature verification baseline",
-				"Failure replay process",
-			},
-			Deliverables: []string{
-				"Firm quote with timeline",
-				"Implementation plan and assumptions",
-			},
-			AcceptanceCriteria: []string{
-				"Quoted scope covers retry, signature, and replay",
-				"Includes rollout and validation steps",
-			},
-			RewardModel: "Quoted engagement",
-			Visibility:  packets.VisibilityPublic,
-		}, true
-	case "pipeline-rfp":
-		return packets.NormalizedPacket{
-			Title: "RFP: modernize CI pipeline for multi-service releases",
-			Kind:  packets.KindRFP,
-			Scope: []string{
-				"Current-state CI assessment",
-				"Proposed target architecture",
-				"Migration approach with risk controls",
-			},
-			Deliverables: []string{
-				"Formal proposal document",
-				"Milestone plan and staffing model",
-			},
-			AcceptanceCriteria: []string{
-				"Proposal includes implementation and ownership boundaries",
-				"Risk, rollback, and delivery timeline are explicit",
-			},
-			RewardModel: "Proposal-based selection",
-			Visibility:  packets.VisibilityPublic,
-		}, true
-	default:
-		return packets.NormalizedPacket{}, false
+		},
 	}
+}
+
+func seededExampleBySlug(slug string) (packets.NormalizedPacket, bool) {
+	for _, example := range SeededExamples() {
+		if example.Slug == slug {
+			return example.Packet, true
+		}
+	}
+	return packets.NormalizedPacket{}, false
 }

@@ -10,6 +10,7 @@ Current product shape:
 - Immutable `work_versions`
 - Exact + quotient hash provenance
 - Minimal reviewer queue surface
+- Keyboard-first terminal client over HTTP (`cmd/bountystash-tui`)
 
 ## Current Milestone Scope
 
@@ -19,6 +20,14 @@ Current product shape:
 - `GET /examples/{slug}` seeded packet examples
 - `GET /review` minimal reviewer queue (with private security separated)
 - `GET /healthz` health probe
+- JSON API for terminal client:
+  - `GET /api/healthz`
+  - `GET /api/examples`
+  - `GET /api/examples/{slug}`
+  - `GET /api/review`
+  - `GET /api/work`
+  - `GET /api/work/{id}`
+  - `POST /api/draft`
 
 ## Run
 
@@ -38,12 +47,42 @@ Nix equivalents:
 nix run .#default
 ```
 
+Terminal client:
+
+```bash
+go run ./cmd/bountystash-tui --base-url http://127.0.0.1:8080
+```
+
+Or with env fallback:
+
+```bash
+BOUNTYSTASH_BASE_URL=http://127.0.0.1:8080 go run ./cmd/bountystash-tui
+```
+
+Nix:
+
+```bash
+nix run .#tui
+```
+
+TUI keys:
+
+- `b` browse examples + recent persisted work
+- `r` review queue (private security separated)
+- `c` create draft
+- `Enter` inspect selected item
+- `Ctrl+S` submit draft in create mode
+- `Ctrl+L` reload backend data
+- `?` help overlay
+- `q` quit
+
 Build and checks:
 
 ```bash
 go build ./...
 go test ./...
 nix build .#default
+nix build .#tui
 nix flake check
 ```
 

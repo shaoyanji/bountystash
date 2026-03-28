@@ -27,6 +27,7 @@ func NewRouter(cfg Config) (http.Handler, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("initialize review handler: %w", err)
 	}
+	apiHandler := handlers.NewAPIHandler(draftHandler, reviewHandler)
 
 	r := chi.NewRouter()
 
@@ -40,6 +41,16 @@ func NewRouter(cfg Config) (http.Handler, error) {
 	r.Get("/work/{id}", draftHandler.HandleWorkShow)
 	r.Get("/examples/{slug}", handlers.HandleExampleShow)
 	r.Get("/review", reviewHandler.HandleQueue)
+
+	r.Route("/api", func(api chi.Router) {
+		api.Get("/healthz", apiHandler.HandleHealthz)
+		api.Get("/examples", apiHandler.HandleExamplesList)
+		api.Get("/examples/{slug}", apiHandler.HandleExampleShow)
+		api.Get("/review", apiHandler.HandleReview)
+		api.Get("/work", apiHandler.HandleWorkList)
+		api.Get("/work/{id}", apiHandler.HandleWorkShow)
+		api.Post("/draft", apiHandler.HandleDraftCreate)
+	})
 
 	return r, nil
 }
