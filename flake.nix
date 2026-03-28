@@ -22,8 +22,8 @@
 
         subPackages = ["cmd/web"];
 
-        # First build will fail with the real hash. Replace fakeHash
-        # with the value printed by nix build.
+        # If dependencies change, set this to pkgs.lib.fakeHash once,
+        # run nix build, then replace with the printed real hash.
         vendorHash = "sha256-MCbuaf7FSNDhNJAQxyT6DSGPy7zbYlKGrya2FWaC8x8=";
         # vendorHash = pkgs.lib.fakeHash;
 
@@ -42,6 +42,9 @@
       default = {
         type = "app";
         program = "${self.packages.${system}.default}/bin/web";
+        meta = {
+          description = "Run the Bountystash web server";
+        };
       };
     });
 

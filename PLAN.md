@@ -281,20 +281,19 @@ Acceptance:
 
 Goal: establish the first reviewer-facing operational flow.
 
-Status: not yet implemented.
+Status: complete at minimal level.
 
-Deliverables:
+Current implementation:
 
-- review queue data model
-- draft-to-review transition
-- reviewer queue page
-- minimal review status handling
+- reviewer queue page at `GET /review`
+- queue rows loaded from persisted `work_items` in `open` or `review` status
+- `private_security` items separated into a dedicated private section
 
 Acceptance:
 
-- creating a draft can place it into a reviewable state
+- creating a work item places it into a reviewable state (`open`)
 - reviewer page renders queued items
-- `private_security` drafts are clearly separated from public-facing flows
+- `private_security` items are clearly separated from standard flow
 
 Important constraint:
 
@@ -408,14 +407,13 @@ Outputs:
 
 From the current repo state, use this order:
 
-1. tighten intake form on `GET /`
-2. keep persisted `POST /draft` / `GET /work/{id}` stable
-3. clean up normalization edge cases
-4. add tests around create/read and hashing
-5. add minimal review queue page
-6. add minimal review state transitions
-7. add auth / visibility guards
-8. expand provenance only if the review flow truly needs it
+1. keep persisted `POST /draft` / `GET /work/{id}` stable
+2. clean up normalization and validation edge cases
+3. add tests around create/read and hashing determinism
+4. harden review queue behavior and copy consistency
+5. wire persisted `DATABASE_URL` into deployment secrets
+6. add auth / visibility guards only when reviewer access is ready
+7. expand provenance only if the review flow truly needs it
 
 ---
 
@@ -436,7 +434,7 @@ Gate:
 Gate:
 
 - review queue page exists
-- queueable drafts can be listed for review
+- queueable work items can be listed for review
 - private security items remain private by default
 
 ### Milestone 3 — controlled internal alpha
@@ -456,8 +454,8 @@ Gate:
 - [x] Go module initialized
 - [x] local config scaffolded
 - [x] Nix flake added
-- [ ] migration workflow documented clearly
-- [ ] vendor-hash refresh workflow documented clearly
+- [x] migration workflow documented clearly
+- [x] vendor-hash refresh workflow documented clearly
 
 ### Database
 
@@ -474,13 +472,13 @@ Gate:
 - [x] draft route
 - [x] example route
 - [x] work item show route
-- [ ] review queue route
+- [x] review queue route
 
 ### Packet pipeline
 
 - [x] input struct defined
 - [x] normalization implemented
-- [ ] validation made explicit
+- [x] validation made explicit
 - [x] version create flow implemented
 
 ### Provenance
@@ -494,9 +492,9 @@ Gate:
 
 ### Review
 
-- [ ] queue state in use
-- [ ] review handler
-- [ ] review template
+- [x] queue state in use
+- [x] review handler
+- [x] review template
 
 ### Security / access
 
@@ -565,7 +563,6 @@ Suggested test locations:
 
 - `internal/packets/*_test.go`
 - `internal/http/handlers/*_test.go`
-- `internal/provenance/*_test.go`
 
 ---
 
@@ -575,8 +572,7 @@ These docs should evolve with the code:
 
 - `README.md`
 - `PLAN.md`
-- `docs/provenance-model.md`
-- `docs/architecture.md`
+- `AGENTS.md`
 
 Add these later only when they become real:
 
@@ -589,12 +585,11 @@ Add these later only when they become real:
 
 From the current state, the shortest useful path is:
 
-1. make `GET /` a real server-rendered intake form if it is still placeholder-heavy
-2. add tests around persisted create/read flow
-3. add the minimal review queue page
-4. wire persisted `DATABASE_URL` into deployment secrets
-5. deploy the persisted version cleanly
-6. only then add auth / visibility controls
+1. add tests around persisted create/read and hash determinism
+2. harden validation and copy consistency
+3. wire persisted `DATABASE_URL` into deployment secrets
+4. deploy the persisted version cleanly
+5. only then add auth / visibility controls
 
 ---
 

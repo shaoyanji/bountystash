@@ -9,7 +9,7 @@ import (
 	"github.com/shaoyanji/bountystash/internal/http/handlers"
 )
 
-// NewRouter wires the minimal HTTP surface for milestone bootstrap.
+// NewRouter wires the thin 0.1 HTTP surface.
 func NewRouter(cfg Config) (http.Handler, error) {
 	db, err := openPostgres(cfg.DatabaseURL)
 	if err != nil {

@@ -93,12 +93,13 @@ Every implementation must preserve:
 Provenance is not a marketing layer.
 It must correspond to concrete events in the system.
 
-At minimum:
+For the current 0.1.x scope, provenance minimum means:
 
 - compute exact content hash from canonical packet data
 - compute quotient hash from defined projection rules
-- record attestation rows when versions are created
-- link parent/child entities through lineage edges where applicable
+- persist both hashes with each immutable version row
+
+Attestation rows and lineage edges are valid future extensions, but should not be implied as already implemented unless schema and writes exist.
 
 Do not add vague provenance features without storage and retrieval paths.
 

@@ -24,13 +24,30 @@ Current product shape:
 
 1. Set `DATABASE_URL` to a reachable Postgres database.
 2. Apply `db/migrations/0001_init.sql`.
-3. Start the server:
+3. Start the server with Go:
 
 ```bash
 go run ./cmd/web
 ```
 
 Default bind is `:8080` (or `$PORT`).
+
+Nix equivalents:
+
+```bash
+nix run .#default
+```
+
+Build and checks:
+
+```bash
+go build ./...
+go test ./...
+nix build .#default
+nix flake check
+```
+
+If `vendorHash` changes after dependency updates, temporarily set `vendorHash = pkgs.lib.fakeHash;`, run `nix build .#default`, and replace `vendorHash` with the hash from the build error.
 
 ## Determinism and Safety Notes
 
