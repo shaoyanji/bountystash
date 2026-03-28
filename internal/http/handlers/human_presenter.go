@@ -38,6 +38,8 @@ type humanList struct {
 	Items []string
 }
 
+const manifestPath = "/.well-known/bountystash-manifest"
+
 func humanRouteRepresentation(r *http.Request) represent.Determination {
 	return represent.Determine(r, represent.Options{Contract: represent.ContractHuman})
 }
@@ -224,7 +226,86 @@ func landingDocument() humanDocument {
 			{
 				Heading: "Next step",
 				Paragraphs: []string{
+					"Discovery: " + manifestPath,
 					"Start with /examples/auth-loop for a safe sample, or move to /api/examples when you need structured JSON immediately.",
+				},
+			},
+		},
+	}
+}
+
+func manifestDocument() humanDocument {
+	return humanDocument{
+		Title:   "Bountystash Manifest",
+		Summary: "Thin work packet system with examples, a review queue, immutable work versions, and exact/quotient hashes.",
+		Sections: []humanSection{
+			{
+				Heading: "Description",
+				Paragraphs: []string{
+					"Bountystash is a thin Go app with server-rendered HTML routes, additive JSON APIs, and readable non-browser output on selected human-facing routes.",
+				},
+			},
+			{
+				Heading: "Useful human routes",
+				Lists: []humanList{
+					{
+						Items: []string{
+							"/",
+							"/examples/{slug}",
+							"/work/{id}",
+							"/review",
+						},
+					},
+				},
+			},
+			{
+				Heading: "Useful API routes",
+				Lists: []humanList{
+					{
+						Items: []string{
+							"/api/examples",
+							"/api/examples/{slug}",
+							"/api/review",
+							"/api/work/{id}",
+							"/api/healthz",
+							"/api/draft",
+						},
+					},
+				},
+			},
+			{
+				Heading: "Format overrides",
+				Lists: []humanList{
+					{
+						Items: []string{
+							"?format=html",
+							"?format=md",
+							"?format=text",
+						},
+					},
+				},
+			},
+			{
+				Heading: "Representation rules",
+				Lists: []humanList{
+					{
+						Items: []string{
+							"Human-facing routes may return readable non-browser output.",
+							"/api/* routes stay JSON.",
+						},
+					},
+				},
+			},
+			{
+				Heading: "Agent notes",
+				Lists: []humanList{
+					{
+						Items: []string{
+							"Use human-facing routes for readable output.",
+							"Use /api/* for machine JSON.",
+							"Prefer this manifest over broad scraping.",
+						},
+					},
 				},
 			},
 		},

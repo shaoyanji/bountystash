@@ -32,6 +32,7 @@ func NewRouter(cfg Config) (http.Handler, error) {
 	r := chi.NewRouter()
 
 	r.Get("/", draftHandler.HandleHome)
+	r.Get("/.well-known/bountystash-manifest", handlers.HandleManifest)
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusOK)

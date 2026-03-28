@@ -50,7 +50,7 @@ func TestHandleHomeNonBrowserDefaultsToMarkdown(t *testing.T) {
 		t.Fatalf("content-type = %q, want markdown", got)
 	}
 	body := rec.Body.String()
-	for _, needle := range []string{"# Bountystash", "## Useful routes", "## Useful API endpoints", "## Format overrides"} {
+	for _, needle := range []string{"# Bountystash", "## Useful routes", "## Useful API endpoints", "## Format overrides", "Discovery: /.well-known/bountystash-manifest"} {
 		if !strings.Contains(body, needle) {
 			t.Fatalf("body missing %q:\n%s", needle, body)
 		}
@@ -96,6 +96,58 @@ func TestHandleExampleShowNonBrowserDefaultsToMarkdown(t *testing.T) {
 		if !strings.Contains(body, needle) {
 			t.Fatalf("body missing %q:\n%s", needle, body)
 		}
+	}
+}
+
+func TestHandleManifestDefaultsToMarkdown(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/.well-known/bountystash-manifest", nil)
+	rec := httptest.NewRecorder()
+
+	HandleManifest(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	if got := rec.Header().Get("Content-Type"); got != "text/markdown; charset=utf-8" {
+		t.Fatalf("content-type = %q, want markdown", got)
+	}
+	body := rec.Body.String()
+	for _, needle := range []string{"# Bountystash Manifest", "## Useful human routes", "## Useful API routes", "## Format overrides", "## Agent notes", "Prefer this manifest over broad scraping."} {
+		if !strings.Contains(body, needle) {
+			t.Fatalf("body missing %q:\n%s", needle, body)
+		}
+	}
+}
+
+func TestHandleManifestTextOverride(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/.well-known/bountystash-manifest?format=text", nil)
+	rec := httptest.NewRecorder()
+
+	HandleManifest(rec, req)
+
+	if got := rec.Header().Get("Content-Type"); got != "text/plain; charset=utf-8" {
+		t.Fatalf("content-type = %q, want plain text", got)
+	}
+	body := rec.Body.String()
+	if strings.Contains(body, "# Bountystash Manifest") {
+		t.Fatalf("plain text manifest unexpectedly used markdown heading:\n%s", body)
+	}
+	if !strings.Contains(body, "Bountystash Manifest\n====================") {
+		t.Fatalf("plain text manifest missing title underline:\n%s", body)
+	}
+}
+
+func TestHandleManifestDoesNotRequireDBState(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/.well-known/bountystash-manifest?format=md", nil)
+	rec := httptest.NewRecorder()
+
+	HandleManifest(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "/api/draft") {
+		t.Fatalf("manifest missing expected static API route:\n%s", rec.Body.String())
 	}
 }
 

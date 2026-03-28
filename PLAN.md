@@ -34,6 +34,7 @@ The repository already has a working thin prototype with the following proven pi
 - the app is buildable with Nix and deployable on Garnix
 
 0.1.4 adds a small representation boundary (HTML/markdown/plain/JSON selection helper) to prepare for 0.1.5 non-browser terminal/markdown rendering while keeping current HTML/JSON defaults.
+0.1.6 adds an explicit static manifest/discovery surface so agents can find safe routes without scraping.
 
 That means Bountystash is no longer just a stub.
 It is a thin persisted prototype.

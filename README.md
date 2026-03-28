@@ -12,8 +12,9 @@ Current product shape:
 - Minimal reviewer queue surface
 - Keyboard-first terminal client over HTTP (`cmd/bountystash-tui`)
 - First non-browser representation pass for human-facing routes (`html`, `md`, `text`)
+- Static manifest/discovery surface for agents and curl clients
 
-Current release target: `0.1.5` (human-facing routes now prefer readable markdown/text for non-browser clients while `/api/*` stays JSON).
+Current release target: `0.1.6` (adds a canonical discovery manifest so non-browser clients can find safe routes without scraping).
 
 ## Current Milestone Scope
 
@@ -23,12 +24,14 @@ Current release target: `0.1.5` (human-facing routes now prefer readable markdow
 - `GET /examples/{slug}` seeded packet examples
 - `GET /review` minimal reviewer queue (with private security separated)
 - `GET /healthz` health probe
+- `GET /.well-known/bountystash-manifest` static discovery manifest for curl/agents
 - Human-facing route representation rules:
   - Browser-like requests keep HTML on `GET /`, `GET /work/{id}`, `GET /examples/{slug}`, and `GET /review`
   - Non-browser requests to those routes default to readable markdown
   - Supported overrides on those routes: `?format=html`, `?format=md`, `?format=text`
   - `/api/*` stays JSON regardless of `Accept` or `?format=...`
   - `/healthz` stays plain text
+  - The manifest is a discoverability surface, not an API parity layer
 - JSON API for terminal client:
   - `GET /api/healthz`
   - `GET /api/examples`
@@ -60,6 +63,8 @@ Examples:
 
 ```bash
 curl http://127.0.0.1:8080/
+curl http://127.0.0.1:8080/.well-known/bountystash-manifest
+curl 'http://127.0.0.1:8080/.well-known/bountystash-manifest?format=text'
 curl 'http://127.0.0.1:8080/?format=md'
 curl 'http://127.0.0.1:8080/?format=text'
 curl http://127.0.0.1:8080/examples/auth-loop
@@ -70,8 +75,9 @@ curl http://127.0.0.1:8080/api/examples
 Notes:
 
 - Human-facing routes are readable first for non-browser clients; they are not intended to mirror every API response field.
+- `/.well-known/bountystash-manifest` is the canonical next step for agent discovery and route etiquette.
 - Reach for `/api/*` when you want structured JSON.
-- A static manifest/discoverability surface is a likely later step, but it is not part of this pass.
+- Prefer the manifest over broad scraping; prefer `/api/*` over scraping when you need structured data.
 
 ## Run TUI
 
