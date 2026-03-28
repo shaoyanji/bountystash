@@ -11,8 +11,9 @@ Current product shape:
 - Exact + quotient hash provenance
 - Minimal reviewer queue surface
 - Keyboard-first terminal client over HTTP (`cmd/bountystash-tui`)
+- Representation boundary (0.1.4) preparing HTML/markdown/plain selection for future terminal-friendly responses
 
-Current release target: `0.1.3`.
+Current release target: `0.1.4` (representation boundary prep; 0.1.5 will add terminal/markdown rendering for non-browser clients).
 
 ## Current Milestone Scope
 

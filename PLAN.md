@@ -33,6 +33,8 @@ The repository already has a working thin prototype with the following proven pi
 - `private_security` defaults to private visibility
 - the app is buildable with Nix and deployable on Garnix
 
+0.1.4 adds a small representation boundary (HTML/markdown/plain/JSON selection helper) to prepare for 0.1.5 non-browser terminal/markdown rendering while keeping current HTML/JSON defaults.
+
 That means Bountystash is no longer just a stub.
 It is a thin persisted prototype.
 The next work should extend the core, not restart it.

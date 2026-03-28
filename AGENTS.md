@@ -31,6 +31,8 @@ Bountystash is **not yet**:
 
 Agents must preserve this shape.
 
+0.1.4 adds a small representation boundary (HTML/markdown/plain/JSON helper) to prepare for 0.1.5 terminal/markdown responses; defaults remain HTML for browsers and JSON for APIs.
+
 ---
 
 ## Primary implementation principles
