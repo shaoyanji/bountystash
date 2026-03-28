@@ -6,11 +6,11 @@ import (
 	"testing"
 )
 
-func TestDeterminePrecedenceExplicitWins(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/?as=markdown", nil)
-	req.Header.Set("Accept", "application/json")
+func TestDetermineHumanExplicitFormatWins(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/?format=md", nil)
+	req.Header.Set("Accept", "text/html")
 
-	det := Determine(req, Options{Default: RepresentationHTML})
+	det := Determine(req, Options{Contract: ContractHuman})
 
 	if det.Representation != RepresentationMarkdown {
 		t.Fatalf("representation = %s, want markdown", det.Representation)
@@ -20,67 +20,25 @@ func TestDeterminePrecedenceExplicitWins(t *testing.T) {
 	}
 }
 
-func TestDetermineExplicitOptionBeatsQuery(t *testing.T) {
+func TestDetermineHumanIgnoresLegacyAsOverride(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/?as=markdown", nil)
-
-	det := Determine(req, Options{Explicit: "json", Default: RepresentationHTML})
-
-	if det.Representation != RepresentationJSON {
-		t.Fatalf("representation = %s, want json", det.Representation)
-	}
-	if det.Source != "explicit" {
-		t.Fatalf("source = %s, want explicit", det.Source)
-	}
-}
-
-func TestDetermineAcceptFallsBack(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.Header.Set("Accept", "text/markdown, text/html")
-
-	det := Determine(req, Options{Default: RepresentationHTML})
-
-	if det.Representation != RepresentationMarkdown {
-		t.Fatalf("representation = %s, want markdown", det.Representation)
-	}
-	if det.Source != "accept" {
-		t.Fatalf("source = %s, want accept", det.Source)
-	}
-}
-
-func TestDetermineAcceptJSONPreferred(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.Header.Set("Accept", "application/json, text/html")
-
-	det := Determine(req, Options{Default: RepresentationHTML})
-
-	if det.Representation != RepresentationJSON {
-		t.Fatalf("representation = %s, want json", det.Representation)
-	}
-	if det.Source != "accept" {
-		t.Fatalf("source = %s, want accept", det.Source)
-	}
-}
-
-func TestDetermineUserAgentHintOnlyWhenNoOtherSignals(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Header.Set("User-Agent", "curl/8.0.1")
 
-	det := Determine(req, Options{Default: RepresentationHTML})
+	det := Determine(req, Options{Contract: ContractHuman})
 
-	if det.Representation != RepresentationPlainText {
-		t.Fatalf("representation = %s, want plaintext", det.Representation)
+	if det.Representation != RepresentationMarkdown {
+		t.Fatalf("representation = %s, want markdown", det.Representation)
 	}
 	if det.Source != "user-agent" {
 		t.Fatalf("source = %s, want user-agent", det.Source)
 	}
 }
 
-func TestDetermineDefaultBrowserStaysHTML(t *testing.T) {
+func TestDetermineHumanAcceptChoosesHTMLWhenAllowed(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.Header.Set("User-Agent", "Mozilla/5.0")
-	req.Header.Set("Accept", "text/html,application/xhtml+xml")
+	req.Header.Set("Accept", "application/json, text/html")
 
-	det := Determine(req, Options{Default: RepresentationHTML})
+	det := Determine(req, Options{Contract: ContractHuman})
 
 	if det.Representation != RepresentationHTML {
 		t.Fatalf("representation = %s, want html", det.Representation)
@@ -90,16 +48,71 @@ func TestDetermineDefaultBrowserStaysHTML(t *testing.T) {
 	}
 }
 
-func TestDetermineFallsBackToDefaultWhenNoSignals(t *testing.T) {
+func TestDetermineHumanUserAgentDefaultsToMarkdown(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("User-Agent", "curl/8.0.1")
+
+	det := Determine(req, Options{Contract: ContractHuman})
+
+	if det.Representation != RepresentationMarkdown {
+		t.Fatalf("representation = %s, want markdown", det.Representation)
+	}
+	if det.Source != "user-agent" {
+		t.Fatalf("source = %s, want user-agent", det.Source)
+	}
+}
+
+func TestDetermineHumanBrowserUserAgentKeepsHTML(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+
+	det := Determine(req, Options{Contract: ContractHuman})
+
+	if det.Representation != RepresentationHTML {
+		t.Fatalf("representation = %s, want html", det.Representation)
+	}
+	if det.Source != "user-agent" {
+		t.Fatalf("source = %s, want user-agent", det.Source)
+	}
+}
+
+func TestDetermineHumanFallsBackToMarkdown(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 
-	det := Determine(req, Options{Default: RepresentationPlainText})
+	det := Determine(req, Options{Contract: ContractHuman})
+
+	if det.Representation != RepresentationMarkdown {
+		t.Fatalf("representation = %s, want markdown", det.Representation)
+	}
+	if det.Source != "default" {
+		t.Fatalf("source = %s, want default", det.Source)
+	}
+}
+
+func TestDetermineAPIContractForcesJSON(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/examples?format=text", nil)
+	req.Header.Set("Accept", "text/plain")
+
+	det := Determine(req, Options{Contract: ContractAPI})
+
+	if det.Representation != RepresentationJSON {
+		t.Fatalf("representation = %s, want json", det.Representation)
+	}
+	if det.Source != "route" {
+		t.Fatalf("source = %s, want route", det.Source)
+	}
+}
+
+func TestDeterminePlainTextContractForcesPlainText(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/healthz?format=html", nil)
+
+	det := Determine(req, Options{Contract: ContractPlainText})
 
 	if det.Representation != RepresentationPlainText {
 		t.Fatalf("representation = %s, want plaintext", det.Representation)
 	}
-	if det.Source != "default" {
-		t.Fatalf("source = %s, want default", det.Source)
+	if det.Source != "route" {
+		t.Fatalf("source = %s, want route", det.Source)
 	}
 }
 

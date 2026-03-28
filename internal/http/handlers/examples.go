@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/shaoyanji/bountystash/internal/http/represent"
 	"github.com/shaoyanji/bountystash/internal/packets"
 	"github.com/shaoyanji/bountystash/internal/views"
 )
@@ -25,18 +26,32 @@ type Example struct {
 
 // HandleExampleShow renders one seeded example packet by slug.
 func HandleExampleShow(w http.ResponseWriter, r *http.Request) {
+	det := humanRouteRepresentation(r)
 	slug := strings.TrimSpace(chi.URLParam(r, "slug"))
 	example, ok := seededExampleBySlug(slug)
 	if !ok {
-		http.NotFound(w, r)
+		if det.Representation == represent.RepresentationHTML {
+			http.NotFound(w, r)
+			return
+		}
+		writeHumanDocument(w, http.StatusNotFound, det.Representation, errorDocument("Not found", r.URL.Path, http.StatusNotFound, []string{"example not found"}))
+		return
+	}
+
+	data := exampleShowData{
+		Slug:   slug,
+		Packet: example,
+	}
+	if det.Representation != represent.RepresentationHTML {
+		writeHumanDocument(w, http.StatusOK, det.Representation, exampleDocument(Example{
+			Slug:   slug,
+			Packet: example,
+		}))
 		return
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := exampleShowTemplate.ExecuteTemplate(w, "layout", exampleShowData{
-		Slug:   slug,
-		Packet: example,
-	}); err != nil {
+	if err := exampleShowTemplate.ExecuteTemplate(w, "layout", data); err != nil {
 		http.Error(w, "template render error", http.StatusInternalServerError)
 	}
 }

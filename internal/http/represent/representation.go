@@ -2,6 +2,7 @@ package represent
 
 import (
 	"net/http"
+	"slices"
 	"strings"
 )
 
@@ -17,11 +18,23 @@ const (
 	RepresentationJSON      Representation = "json"
 )
 
+type Contract string
+
+const (
+	ContractNegotiated Contract = ""
+	ContractHuman      Contract = "human"
+	ContractAPI        Contract = "api"
+	ContractPlainText  Contract = "plain"
+)
+
 // Options control representation determination for a request.
 type Options struct {
+	// Contract describes the route's representation boundary.
+	Contract Contract
 	// Explicit format override (query param or handler-provided value).
 	Explicit string
-	// Default is used when no override, Accept, or UA hint produces a match.
+	// Default is used when no override, route contract, Accept, or UA hint
+	// produces a match.
 	Default Representation
 }
 
@@ -34,47 +47,58 @@ type Determination struct {
 // Determine resolves the best-effort representation for the request using the
 // following precedence:
 // 1) explicit override (opts.Explicit)
-// 2) Accept header
-// 3) User-Agent hint (terminal-friendly tools)
-// 4) opts.Default (or HTML when unset)
+// 2) route contract
+// 3) Accept header
+// 4) User-Agent hint
+// 5) opts.Default (or a route-aware default when unset)
 //
 // The helper is intentionally small and does not alter handlers by itself; it
 // prepares a shared boundary for 0.1.5 non-browser rendering.
 func Determine(r *http.Request, opts Options) Determination {
 	if opts.Default == "" {
-		opts.Default = RepresentationHTML
+		opts.Default = defaultRepresentationForContract(opts.Contract)
 	}
 
-	if rep, ok := parseExplicit(opts.Explicit); ok {
+	allowed := allowedRepresentations(opts.Contract)
+
+	if rep, ok := parseInternalExplicit(opts.Explicit); ok && allowsRepresentation(allowed, rep) {
 		return Determination{Representation: rep, Source: "explicit"}
 	}
 
-	if rep, ok := parseExplicit(r.URL.Query().Get("as")); ok {
-		return Determination{Representation: rep, Source: "explicit"}
-	}
-	if rep, ok := parseExplicit(r.URL.Query().Get("format")); ok {
+	if rep, ok := parseQueryFormat(r.URL.Query().Get("format")); ok && allowsRepresentation(allowed, rep) {
 		return Determination{Representation: rep, Source: "explicit"}
 	}
 
-	if rep, ok := fromAcceptHeader(r.Header.Get("Accept")); ok {
+	if fixed, ok := fixedRepresentationForContract(opts.Contract); ok {
+		return Determination{Representation: fixed, Source: "route"}
+	}
+
+	if rep, ok := fromAcceptHeader(r.Header.Get("Accept"), allowed); ok {
 		return Determination{Representation: rep, Source: "accept"}
 	}
 
-	if rep, ok := fromUserAgent(r.UserAgent()); ok {
+	if rep, ok := fromUserAgent(r.UserAgent(), allowed); ok {
 		return Determination{Representation: rep, Source: "user-agent"}
 	}
 
-	return Determination{Representation: opts.Default, Source: "default"}
+	if allowsRepresentation(allowed, opts.Default) {
+		return Determination{Representation: opts.Default, Source: "default"}
+	}
+
+	return Determination{
+		Representation: defaultRepresentationForContract(opts.Contract),
+		Source:         "default",
+	}
 }
 
-func parseExplicit(raw string) (Representation, bool) {
+func parseInternalExplicit(raw string) (Representation, bool) {
 	raw = strings.ToLower(strings.TrimSpace(raw))
 	switch raw {
-	case "html", "htm":
+	case "html":
 		return RepresentationHTML, true
-	case "markdown", "md", "mkdown":
+	case "markdown", "md":
 		return RepresentationMarkdown, true
-	case "text", "txt", "plain", "plaintext":
+	case "text", "plaintext":
 		return RepresentationPlainText, true
 	case "json":
 		return RepresentationJSON, true
@@ -83,34 +107,117 @@ func parseExplicit(raw string) (Representation, bool) {
 	}
 }
 
-func fromAcceptHeader(raw string) (Representation, bool) {
-	if raw == "" {
-		return "", false
-	}
-
-	raw = strings.ToLower(raw)
-
-	switch {
-	case strings.Contains(raw, "application/json"):
-		return RepresentationJSON, true
-	case strings.Contains(raw, "text/markdown") || strings.Contains(raw, "text/x-markdown"):
-		return RepresentationMarkdown, true
-	case strings.Contains(raw, "text/plain"):
-		return RepresentationPlainText, true
-	case strings.Contains(raw, "text/html"):
+func parseQueryFormat(raw string) (Representation, bool) {
+	raw = strings.ToLower(strings.TrimSpace(raw))
+	switch raw {
+	case "html":
 		return RepresentationHTML, true
+	case "md":
+		return RepresentationMarkdown, true
+	case "text":
+		return RepresentationPlainText, true
 	default:
 		return "", false
 	}
 }
 
-func fromUserAgent(raw string) (Representation, bool) {
+func fromAcceptHeader(raw string, allowed []Representation) (Representation, bool) {
+	if raw == "" {
+		return "", false
+	}
+
+	for _, part := range strings.Split(raw, ",") {
+		mediaType := strings.ToLower(strings.TrimSpace(strings.SplitN(part, ";", 2)[0]))
+
+		var rep Representation
+		switch mediaType {
+		case "application/json":
+			rep = RepresentationJSON
+		case "text/markdown", "text/x-markdown":
+			rep = RepresentationMarkdown
+		case "text/plain":
+			rep = RepresentationPlainText
+		case "text/html", "application/xhtml+xml":
+			rep = RepresentationHTML
+		default:
+			continue
+		}
+
+		if allowsRepresentation(allowed, rep) {
+			return rep, true
+		}
+	}
+
+	return "", false
+}
+
+func fromUserAgent(raw string, allowed []Representation) (Representation, bool) {
 	raw = strings.ToLower(raw)
 	switch {
 	case strings.Contains(raw, "curl"), strings.Contains(raw, "httpie"), strings.Contains(raw, "wget"):
+		if allowsRepresentation(allowed, RepresentationMarkdown) {
+			return RepresentationMarkdown, true
+		}
+		if allowsRepresentation(allowed, RepresentationPlainText) {
+			return RepresentationPlainText, true
+		}
+	case strings.Contains(raw, "mozilla"), strings.Contains(raw, "chrome"), strings.Contains(raw, "safari"), strings.Contains(raw, "firefox"), strings.Contains(raw, "edg/"):
+		if allowsRepresentation(allowed, RepresentationHTML) {
+			return RepresentationHTML, true
+		}
+	default:
+		return "", false
+	}
+	return "", false
+}
+
+func allowsRepresentation(allowed []Representation, rep Representation) bool {
+	return slices.Contains(allowed, rep)
+}
+
+func allowedRepresentations(contract Contract) []Representation {
+	switch contract {
+	case ContractHuman:
+		return []Representation{
+			RepresentationHTML,
+			RepresentationMarkdown,
+			RepresentationPlainText,
+		}
+	case ContractAPI:
+		return []Representation{RepresentationJSON}
+	case ContractPlainText:
+		return []Representation{RepresentationPlainText}
+	default:
+		return []Representation{
+			RepresentationHTML,
+			RepresentationMarkdown,
+			RepresentationPlainText,
+			RepresentationJSON,
+		}
+	}
+}
+
+func fixedRepresentationForContract(contract Contract) (Representation, bool) {
+	switch contract {
+	case ContractAPI:
+		return RepresentationJSON, true
+	case ContractPlainText:
 		return RepresentationPlainText, true
 	default:
 		return "", false
+	}
+}
+
+func defaultRepresentationForContract(contract Contract) Representation {
+	switch contract {
+	case ContractHuman:
+		return RepresentationMarkdown
+	case ContractAPI:
+		return RepresentationJSON
+	case ContractPlainText:
+		return RepresentationPlainText
+	default:
+		return RepresentationHTML
 	}
 }
 

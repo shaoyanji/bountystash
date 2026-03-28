@@ -17,6 +17,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/shaoyanji/bountystash/internal/http/represent"
 	"github.com/shaoyanji/bountystash/internal/packets"
 	"github.com/shaoyanji/bountystash/internal/views"
 )
@@ -79,6 +80,12 @@ func NewDraftHandler(db *sql.DB) (*DraftHandler, error) {
 }
 
 func (h *DraftHandler) HandleHome(w http.ResponseWriter, r *http.Request) {
+	det := humanRouteRepresentation(r)
+	if det.Representation != represent.RepresentationHTML {
+		writeHumanDocument(w, http.StatusOK, det.Representation, landingDocument())
+		return
+	}
+
 	h.renderHome(w, homeData{}, http.StatusOK)
 }
 
@@ -91,8 +98,13 @@ func (h *DraftHandler) renderHome(w http.ResponseWriter, data homeData, status i
 }
 
 func (h *DraftHandler) HandleDraftPost(w http.ResponseWriter, r *http.Request) {
+	det := humanRouteRepresentation(r)
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "parse form", http.StatusBadRequest)
+		if det.Representation == represent.RepresentationHTML {
+			http.Error(w, "parse form", http.StatusBadRequest)
+			return
+		}
+		writeHumanDocument(w, http.StatusBadRequest, det.Representation, errorDocument("Validation failed", r.URL.Path, http.StatusBadRequest, []string{"parse form"}))
 		return
 	}
 
@@ -108,6 +120,10 @@ func (h *DraftHandler) HandleDraftPost(w http.ResponseWriter, r *http.Request) {
 
 	result, validationErrors, err := h.CreateDraft(r.Context(), input)
 	if !validationErrors.Empty() {
+		if det.Representation != represent.RepresentationHTML {
+			writeHumanDocument(w, http.StatusBadRequest, det.Representation, validationErrorsDocument(r.URL.Path, http.StatusBadRequest, validationErrors))
+			return
+		}
 		h.renderHome(w, homeData{
 			Input:  input,
 			Errors: validationErrors,
@@ -115,7 +131,11 @@ func (h *DraftHandler) HandleDraftPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		http.Error(w, "failed to persist draft", http.StatusInternalServerError)
+		if det.Representation == represent.RepresentationHTML {
+			http.Error(w, "failed to persist draft", http.StatusInternalServerError)
+			return
+		}
+		writeHumanDocument(w, http.StatusInternalServerError, det.Representation, errorDocument("Draft creation failed", r.URL.Path, http.StatusInternalServerError, []string{"failed to persist draft"}))
 		return
 	}
 
@@ -123,19 +143,37 @@ func (h *DraftHandler) HandleDraftPost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *DraftHandler) HandleWorkShow(w http.ResponseWriter, r *http.Request) {
+	det := humanRouteRepresentation(r)
 	id := strings.TrimSpace(chi.URLParam(r, "id"))
 	if !isUUID(id) {
-		http.NotFound(w, r)
+		if det.Representation == represent.RepresentationHTML {
+			http.NotFound(w, r)
+			return
+		}
+		writeHumanDocument(w, http.StatusNotFound, det.Representation, errorDocument("Not found", r.URL.Path, http.StatusNotFound, []string{"work item not found"}))
 		return
 	}
 
 	data, err := h.FetchCurrentPacket(r.Context(), id)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			http.NotFound(w, r)
+			if det.Representation == represent.RepresentationHTML {
+				http.NotFound(w, r)
+				return
+			}
+			writeHumanDocument(w, http.StatusNotFound, det.Representation, errorDocument("Not found", r.URL.Path, http.StatusNotFound, []string{"work item not found"}))
 			return
 		}
-		http.Error(w, "load work item", http.StatusInternalServerError)
+		if det.Representation == represent.RepresentationHTML {
+			http.Error(w, "load work item", http.StatusInternalServerError)
+			return
+		}
+		writeHumanDocument(w, http.StatusInternalServerError, det.Representation, errorDocument("Backend error", r.URL.Path, http.StatusInternalServerError, []string{"load work item"}))
+		return
+	}
+
+	if det.Representation != represent.RepresentationHTML {
+		writeHumanDocument(w, http.StatusOK, det.Representation, workDetailDocument(data))
 		return
 	}
 

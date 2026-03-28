@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/shaoyanji/bountystash/internal/http/represent"
 	"github.com/shaoyanji/bountystash/internal/packets"
 	"github.com/shaoyanji/bountystash/internal/views"
 )
@@ -46,9 +47,19 @@ func NewReviewHandler(db *sql.DB) (*ReviewHandler, error) {
 }
 
 func (h *ReviewHandler) HandleQueue(w http.ResponseWriter, r *http.Request) {
+	det := humanRouteRepresentation(r)
 	data, err := h.FetchQueue(r.Context())
 	if err != nil {
-		http.Error(w, "load review queue", http.StatusInternalServerError)
+		if det.Representation == represent.RepresentationHTML {
+			http.Error(w, "load review queue", http.StatusInternalServerError)
+			return
+		}
+		writeHumanDocument(w, http.StatusInternalServerError, det.Representation, errorDocument("Backend error", r.URL.Path, http.StatusInternalServerError, []string{"load review queue"}))
+		return
+	}
+
+	if det.Representation != represent.RepresentationHTML {
+		writeHumanDocument(w, http.StatusOK, det.Representation, reviewQueueDocument(data))
 		return
 	}
 
