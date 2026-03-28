@@ -17,14 +17,17 @@
     in {
       default = pkgs.buildGoModule {
         pname = "bountystash";
-        version = "0.1.1";
+        version = "0.1.2";
         src = ./.;
 
         subPackages = ["cmd/web"];
 
-        # If dependencies change, set this to pkgs.lib.fakeHash once,
-        # run nix build, then replace with the printed real hash.
-        vendorHash = "sha256-pKk0WuPFSAbf9owFt0TGH4LllpjUofrhOx5j7VUwVzI=";
+        # Hash update ritual (must be repeated for this package when Go deps,
+        # vendoring, or package inputs change):
+        # 1) set vendorHash = pkgs.lib.fakeHash;
+        # 2) run nix build .#default;
+        # 3) replace with the hash shown in the build error.
+        vendorHash = "sha256-zVLALLW4ZkwYD7bJ0UOZ206fRpBJ1FnlVy/ugZI1g8k=";
 
         env = {
           CGO_ENABLED = "0";
@@ -38,14 +41,22 @@
 
       tui = pkgs.buildGoModule {
         pname = "bountystash-tui";
-        version = "0.1.1";
+        version = "0.1.2";
         src = ./.;
 
         subPackages = ["cmd/bountystash-tui"];
 
-        # If dependencies change, set this to pkgs.lib.fakeHash once,
-        # run nix build, then replace with the printed real hash.
+        # Hash update ritual (must be repeated for this package when Go deps,
+        # vendoring, or package inputs change):
+        # 1) set vendorHash = pkgs.lib.fakeHash;
+        # 2) run nix build .#tui;
+        # 3) replace with the hash shown in the build error.
         vendorHash = "sha256-zVLALLW4ZkwYD7bJ0UOZ206fRpBJ1FnlVy/ugZI1g8k=";
+        ldflags = [
+          "-X github.com/shaoyanji/bountystash/internal/version.Version=0.1.2"
+          "-X github.com/shaoyanji/bountystash/internal/version.Commit=flake"
+          "-X github.com/shaoyanji/bountystash/internal/version.Date=unknown"
+        ];
 
         env = {
           CGO_ENABLED = "0";

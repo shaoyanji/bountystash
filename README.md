@@ -12,6 +12,8 @@ Current product shape:
 - Minimal reviewer queue surface
 - Keyboard-first terminal client over HTTP (`cmd/bountystash-tui`)
 
+Current release target: `0.1.2`.
+
 ## Current Milestone Scope
 
 - `GET /` intake form
@@ -29,7 +31,7 @@ Current product shape:
   - `GET /api/work/{id}`
   - `POST /api/draft`
 
-## Run
+## Run Web
 
 1. Set `DATABASE_URL` to a reachable Postgres database.
 2. Apply `db/migrations/0001_init.sql`.
@@ -47,13 +49,25 @@ Nix equivalents:
 nix run .#default
 ```
 
-Terminal client:
+## Run TUI
+
+Default API endpoint used by the TUI:
+
+`https://garnixmachine.main.nixconfig.shaoyanji.garnix.me/`
+
+Run with defaults:
+
+```bash
+go run ./cmd/bountystash-tui
+```
+
+Override explicitly with flag (highest precedence):
 
 ```bash
 go run ./cmd/bountystash-tui --base-url http://127.0.0.1:8080
 ```
 
-Or with env fallback:
+Or override with environment variable (used when `--base-url` is not passed):
 
 ```bash
 BOUNTYSTASH_BASE_URL=http://127.0.0.1:8080 go run ./cmd/bountystash-tui
@@ -63,6 +77,12 @@ Nix:
 
 ```bash
 nix run .#tui
+```
+
+Show TUI build metadata:
+
+```bash
+go run ./cmd/bountystash-tui --version
 ```
 
 TUI keys:
@@ -76,7 +96,7 @@ TUI keys:
 - `?` help overlay
 - `q` quit
 
-Build and checks:
+## Build and Verify
 
 ```bash
 go build ./...
@@ -86,7 +106,51 @@ nix build .#tui
 nix flake check
 ```
 
-If `vendorHash` changes after dependency updates, temporarily set `vendorHash = pkgs.lib.fakeHash;`, run `nix build .#default`, and replace `vendorHash` with the hash from the build error.
+## Release Artifacts
+
+Tagged releases (`v*`) run `.github/workflows/release.yml` and publish:
+
+- `bountystash-tui_<version>_linux_x86_64.tar.gz`
+
+Example:
+
+```bash
+git tag v0.1.2
+git push origin v0.1.2
+```
+
+## Nix Hash Update Ritual
+
+If Go dependencies, vendoring, or package inputs change, refresh `vendorHash` values in `flake.nix` before relying on CI/deploy.
+
+For `.#default`:
+
+1. Set `packages.<system>.default.vendorHash = pkgs.lib.fakeHash;`
+2. Run `nix build .#default`
+3. Copy the hash from the build error into `vendorHash`
+
+For `.#tui`:
+
+1. Set `packages.<system>.tui.vendorHash = pkgs.lib.fakeHash;`
+2. Run `nix build .#tui`
+3. Copy the hash from the build error into `vendorHash`
+
+Then run the full verification set:
+
+```bash
+go test ./...
+go build ./...
+nix build .#default
+nix build .#tui
+nix flake check
+```
+
+Release/deploy checklist:
+
+1. Update hashes if needed using the ritual above.
+2. Run the full verification set locally.
+3. Open/merge PR with passing CI.
+4. Tag release (`vX.Y.Z`) to publish TUI artifact(s).
 
 ## Determinism and Safety Notes
 

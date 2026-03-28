@@ -1,0 +1,49 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  tui-release-artifact:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build Linux x86_64 TUI archive
+        env:
+          VERSION: ${{ github.ref_name }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          VERSION_NO_V="${VERSION#v}"
+          BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+            go build -trimpath \
+              -ldflags="-s -w \
+                -X github.com/shaoyanji/bountystash/internal/version.Version=${VERSION_NO_V} \
+                -X github.com/shaoyanji/bountystash/internal/version.Commit=${COMMIT} \
+                -X github.com/shaoyanji/bountystash/internal/version.Date=${BUILD_DATE}" \
+              -o dist/bountystash-tui \
+              ./cmd/bountystash-tui
+
+          tar -C dist -czf "dist/bountystash-tui_${VERSION_NO_V}_linux_x86_64.tar.gz" bountystash-tui
+
+      - name: Publish GitHub release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/bountystash-tui_*_linux_x86_64.tar.gz
+          generate_release_notes: true

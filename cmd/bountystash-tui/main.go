@@ -18,6 +18,7 @@ import (
 	clientapi "github.com/shaoyanji/bountystash/internal/client/api"
 	"github.com/shaoyanji/bountystash/internal/http/handlers"
 	"github.com/shaoyanji/bountystash/internal/packets"
+	"github.com/shaoyanji/bountystash/internal/version"
 )
 
 type mode string
@@ -115,6 +116,8 @@ type model struct {
 
 var kinds = []string{"bounty", "rfq", "rfp", "private_security"}
 var visibilities = []string{"draft", "private", "public", "archived"}
+
+const compiledDefaultBaseURL = "https://garnixmachine.main.nixconfig.shaoyanji.garnix.me/"
 
 func initialModel(api clientapi.Client, baseURL string, noColor bool) model {
 	browse := list.New([]list.Item{}, list.NewDefaultDelegate(), 30, 20)
@@ -325,7 +328,7 @@ func (m model) renderHeader() string {
 	if !m.noColor && m.status == "ok" {
 		status = lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Render(status)
 	}
-	return "Bountystash TUI 0.1.1 | " + status + " | " + m.baseURL
+	return "Bountystash TUI " + version.Short() + " | " + status + " | " + m.baseURL
 }
 
 func (m model) renderMain() string {
@@ -648,26 +651,39 @@ func max(a, b int) int {
 	return b
 }
 
-func main() {
-	defaultBaseURL := strings.TrimSpace(os.Getenv("BOUNTYSTASH_BASE_URL"))
-	if defaultBaseURL == "" {
-		defaultBaseURL = "http://127.0.0.1:8080"
+func resolveBaseURL(flagValue string) string {
+	if trimmed := strings.TrimSpace(flagValue); trimmed != "" {
+		return trimmed
 	}
+	if trimmed := strings.TrimSpace(os.Getenv("BOUNTYSTASH_BASE_URL")); trimmed != "" {
+		return trimmed
+	}
+	return compiledDefaultBaseURL
+}
 
+func main() {
 	var (
-		baseURL = flag.String("base-url", defaultBaseURL, "Bountystash backend base URL")
+		baseURL = flag.String("base-url", "", "Bountystash backend base URL")
 		timeout = flag.Duration("timeout", 8*time.Second, "HTTP timeout")
 		noColor = flag.Bool("no-color", false, "disable color styling")
+		showVer = flag.Bool("version", false, "print version/build info and exit")
 	)
 	flag.Parse()
 
-	api, err := clientapi.New(*baseURL, *timeout)
+	if *showVer {
+		fmt.Println(version.BuildInfo())
+		return
+	}
+
+	resolvedBaseURL := resolveBaseURL(*baseURL)
+
+	api, err := clientapi.New(resolvedBaseURL, *timeout)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to initialize API client: %v\n", err)
 		os.Exit(1)
 	}
 
-	p := tea.NewProgram(initialModel(api, *baseURL, *noColor), tea.WithAltScreen())
+	p := tea.NewProgram(initialModel(api, resolvedBaseURL, *noColor), tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "tui error: %v\n", err)
 		os.Exit(1)
