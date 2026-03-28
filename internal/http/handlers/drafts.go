@@ -15,36 +15,61 @@ import (
 	"strings"
 	"time"
 
-	"bountystash/internal/packets"
-	"bountystash/internal/views"
 	"github.com/go-chi/chi/v5"
+
+	"github.com/shaoyanji/bountystash/internal/packets"
+	"github.com/shaoyanji/bountystash/internal/views"
 )
 
 type DraftHandler struct {
 	db               *sql.DB
+	homeTemplate     *template.Template
 	workShowTemplate *template.Template
 }
 
+type homeData struct {
+	Input  packets.DraftInput
+	Errors map[string]string
+}
+
 type workShowData struct {
-	ID     string
-	Packet packets.NormalizedPacket
+	ID           string
+	Status       string
+	CreatedAt    time.Time
+	Version      int
+	ExactHash    string
+	QuotientHash string
+	Packet       packets.NormalizedPacket
 }
 
 func NewDraftHandler(db *sql.DB) (*DraftHandler, error) {
-	workShowTemplate, err := template.ParseFS(views.FS, "work_show.tmpl")
+	homeTemplate, err := views.Parse("home.tmpl")
+	if err != nil {
+		return nil, err
+	}
+
+	workShowTemplate, err := views.Parse("work_show.tmpl", "work_packet.tmpl")
 	if err != nil {
 		return nil, err
 	}
 
 	return &DraftHandler{
 		db:               db,
+		homeTemplate:     homeTemplate,
 		workShowTemplate: workShowTemplate,
 	}, nil
 }
 
-// RegisterDraftRoutes wires only the draft preview endpoint for milestone intake flow.
-func RegisterDraftRoutes(mux *http.ServeMux) {
-	_ = mux
+func (h *DraftHandler) HandleHome(w http.ResponseWriter, r *http.Request) {
+	h.renderHome(w, homeData{}, http.StatusOK)
+}
+
+func (h *DraftHandler) renderHome(w http.ResponseWriter, data homeData, status int) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
+	if err := h.homeTemplate.ExecuteTemplate(w, "layout", data); err != nil {
+		http.Error(w, "template render error", http.StatusInternalServerError)
+	}
 }
 
 func (h *DraftHandler) HandleDraftPost(w http.ResponseWriter, r *http.Request) {
@@ -63,7 +88,16 @@ func (h *DraftHandler) HandleDraftPost(w http.ResponseWriter, r *http.Request) {
 		Visibility:         r.FormValue("visibility"),
 	}
 
-	normalized := normalizeDraft(input)
+	validationErrors := packets.ValidateDraftInput(input)
+	if !validationErrors.Empty() {
+		h.renderHome(w, homeData{
+			Input:  input,
+			Errors: validationErrors,
+		}, http.StatusBadRequest)
+		return
+	}
+
+	normalized := packets.NormalizeDraft(input)
 	workID, err := h.insertDraft(r.Context(), normalized)
 	if err != nil {
 		http.Error(w, "failed to persist draft", http.StatusInternalServerError)
@@ -80,7 +114,7 @@ func (h *DraftHandler) HandleWorkShow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	packet, err := h.fetchCurrentPacket(r.Context(), id)
+	data, err := h.fetchCurrentPacket(r.Context(), id)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			http.NotFound(w, r)
@@ -91,10 +125,7 @@ func (h *DraftHandler) HandleWorkShow(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := h.workShowTemplate.Execute(w, workShowData{
-		ID:     id,
-		Packet: packet,
-	}); err != nil {
+	if err := h.workShowTemplate.ExecuteTemplate(w, "layout", data); err != nil {
 		http.Error(w, "template render error", http.StatusInternalServerError)
 	}
 }
@@ -160,39 +191,56 @@ func (h *DraftHandler) insertDraft(ctx context.Context, normalized packets.Norma
 	return workID, nil
 }
 
-func (h *DraftHandler) fetchCurrentPacket(ctx context.Context, workID string) (packets.NormalizedPacket, error) {
+func (h *DraftHandler) fetchCurrentPacket(ctx context.Context, workID string) (workShowData, error) {
 	var (
-		kind       string
-		visibility string
-		packetJSON []byte
+		kind         string
+		visibility   string
+		packetJSON   []byte
+		data         workShowData
+		packetStatus string
 	)
 
 	err := h.db.QueryRowContext(ctx, `
-		SELECT wi.kind, wi.visibility, wv.packet
+		SELECT wi.kind, wi.visibility, wi.status, wi.created_at, wv.version_number, wv.exact_hash, wv.quotient_hash, wv.packet
 		FROM work_items AS wi
 		JOIN work_versions AS wv
 		  ON wv.work_item_id = wi.id
 		 AND wv.id = wi.current_version_id
 		WHERE wi.id = $1
-	`, workID).Scan(&kind, &visibility, &packetJSON)
+	`, workID).Scan(
+		&kind,
+		&visibility,
+		&packetStatus,
+		&data.CreatedAt,
+		&data.Version,
+		&data.ExactHash,
+		&data.QuotientHash,
+		&packetJSON,
+	)
 	if err != nil {
-		return packets.NormalizedPacket{}, err
+		return workShowData{}, err
 	}
 
 	var packet packets.NormalizedPacket
 	if err := json.Unmarshal(packetJSON, &packet); err != nil {
-		return packets.NormalizedPacket{}, err
+		return workShowData{}, err
 	}
 	packet.Kind = packets.Kind(kind)
 	packet.Visibility = packets.Visibility(visibility)
 
-	return packet, nil
+	data.ID = workID
+	data.Status = packetStatus
+	data.Packet = packet
+	return data, nil
 }
 
+// canonicalJSON is hash material for exact packet provenance.
+// The packet excludes runtime fields so identical input normalizes to identical bytes.
 func canonicalJSON(packet packets.NormalizedPacket) ([]byte, error) {
 	return json.Marshal(packet)
 }
 
+// quotientProjectionJSON is the deliberate projection used for quotient lineage grouping.
 func quotientProjectionJSON(packet packets.NormalizedPacket) ([]byte, error) {
 	type quotientProjection struct {
 		Kind               packets.Kind       `json:"kind"`
@@ -241,77 +289,4 @@ func newUUID() (string, error) {
 		b[8:10],
 		b[10:16],
 	), nil
-}
-
-func normalizeDraft(in packets.DraftInput) packets.NormalizedPacket {
-	kind := normalizeKind(in.Kind)
-	visibility := normalizeVisibility(in.Visibility)
-
-	// Safety default: private security items must not become public by default.
-	if kind == packets.KindPrivateSecurity && visibility != packets.VisibilityPrivate {
-		visibility = packets.VisibilityPrivate
-	}
-
-	return packets.NormalizedPacket{
-		Title:              normalizeTitle(in.Title),
-		Kind:               kind,
-		Scope:              normalizeList(in.Scope),
-		Deliverables:       normalizeList(in.Deliverables),
-		AcceptanceCriteria: normalizeList(in.AcceptanceCriteria),
-		RewardModel:        strings.TrimSpace(in.RewardModel),
-		Visibility:         visibility,
-		NormalizedAt:       time.Now().UTC(),
-	}
-}
-
-func normalizeTitle(raw string) string {
-	t := strings.TrimSpace(raw)
-	if t == "" {
-		return "Untitled Draft"
-	}
-	return t
-}
-
-func normalizeKind(raw string) packets.Kind {
-	switch packets.Kind(strings.TrimSpace(strings.ToLower(raw))) {
-	case packets.KindBounty:
-		return packets.KindBounty
-	case packets.KindRFQ:
-		return packets.KindRFQ
-	case packets.KindRFP:
-		return packets.KindRFP
-	case packets.KindPrivateSecurity:
-		return packets.KindPrivateSecurity
-	default:
-		return packets.KindBounty
-	}
-}
-
-func normalizeVisibility(raw string) packets.Visibility {
-	switch packets.Visibility(strings.TrimSpace(strings.ToLower(raw))) {
-	case packets.VisibilityDraft:
-		return packets.VisibilityDraft
-	case packets.VisibilityPrivate:
-		return packets.VisibilityPrivate
-	case packets.VisibilityPublic:
-		return packets.VisibilityPublic
-	case packets.VisibilityArchived:
-		return packets.VisibilityArchived
-	default:
-		return packets.VisibilityDraft
-	}
-}
-
-func normalizeList(raw string) []string {
-	normalizedRaw := strings.ReplaceAll(raw, `\n`, "\n")
-	rows := strings.Split(normalizedRaw, "\n")
-	out := make([]string, 0, len(rows))
-	for _, row := range rows {
-		v := strings.TrimSpace(row)
-		if v == "" {
-			continue
-		}
-		out = append(out, v)
-	}
-	return out
 }

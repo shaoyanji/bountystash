@@ -1,154 +1,83 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Bountystash</title>
-  <style>
-    :root {
-      --bg: #f7f5ef;
-      --ink: #1f2933;
-      --muted: #52606d;
-      --accent: #0e7490;
-      --card: #ffffff;
-      --border: #d9e2ec;
-    }
+{{define "title"}}Bountystash Intake{{end}}
 
-    * { box-sizing: border-box; }
+{{define "content"}}
+<section class="hero">
+  <h1>Bountystash</h1>
+  <p>Messy intake becomes a deterministic, immutable packet with persisted provenance hashes.</p>
+</section>
 
-    body {
-      margin: 0;
-      font-family: Georgia, "Times New Roman", serif;
-      background:
-        radial-gradient(circle at 20% 0%, rgba(14,116,144,0.08), transparent 40%),
-        linear-gradient(180deg, var(--bg), #fff);
-      color: var(--ink);
-      min-height: 100vh;
-      display: grid;
-      place-items: center;
-      padding: 24px;
-    }
+{{if .Errors}}
+<section class="panel error-panel">
+  <h2>Submission Error</h2>
+  <ul>
+    {{with index .Errors "title"}}<li>{{.}}</li>{{end}}
+    {{with index .Errors "kind"}}<li>{{.}}</li>{{end}}
+    {{with index .Errors "visibility"}}<li>{{.}}</li>{{end}}
+  </ul>
+</section>
+{{end}}
 
-    main {
-      width: min(780px, 100%);
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 40px 28px;
-      box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
-    }
+<section class="panel">
+  <h2>Draft Intake</h2>
+  <form method="post" action="/draft" class="intake-form">
+    <label>
+      Title
+      <input type="text" name="title" placeholder="Short task title" required value="{{.Input.Title}}">
+    </label>
 
-    h1 {
-      margin: 0 0 14px;
-      font-size: clamp(2rem, 5vw, 2.8rem);
-      line-height: 1.05;
-      letter-spacing: 0.01em;
-    }
-
-    p {
-      margin: 0 0 16px;
-      color: var(--muted);
-      font-size: 1rem;
-      line-height: 1.5;
-    }
-
-    form {
-      margin-top: 20px;
-      display: grid;
-      gap: 14px;
-    }
-
-    label {
-      display: grid;
-      gap: 6px;
-      font-size: 0.95rem;
-      color: var(--ink);
-    }
-
-    input, select, textarea, button {
-      font: inherit;
-      color: var(--ink);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 10px 12px;
-      background: #fff;
-    }
-
-    textarea {
-      min-height: 96px;
-      resize: vertical;
-    }
-
-    .grid {
-      display: grid;
-      gap: 14px;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    }
-
-    button {
-      background: var(--accent);
-      border-color: var(--accent);
-      color: #fff;
-      cursor: pointer;
-      width: fit-content;
-    }
-  </style>
-</head>
-<body>
-  <main>
-    <h1>Bountystash</h1>
-    <p>Submit a draft intake packet. This will persist and redirect to its work page.</p>
-
-    <form method="post" action="/draft">
+    <div class="grid">
       <label>
-        Title
-        <input type="text" name="title" placeholder="Short task title" required>
-      </label>
-
-      <div class="grid">
-        <label>
-          Kind
-          <select name="kind" required>
-            <option value="bounty">bounty</option>
-            <option value="rfq">rfq</option>
-            <option value="rfp">rfp</option>
-            <option value="private_security">private_security</option>
-          </select>
-        </label>
-
-        <label>
-          Visibility
-          <select name="visibility" required>
-            <option value="draft">draft</option>
-            <option value="private">private</option>
-            <option value="public">public</option>
-            <option value="archived">archived</option>
-          </select>
-        </label>
-      </div>
-
-      <label>
-        Scope
-        <textarea name="scope" placeholder="One line per scope item"></textarea>
+        Kind
+        <select name="kind" required>
+          <option value="bounty" {{if eq .Input.Kind "bounty"}}selected{{end}}>bounty</option>
+          <option value="rfq" {{if eq .Input.Kind "rfq"}}selected{{end}}>rfq</option>
+          <option value="rfp" {{if eq .Input.Kind "rfp"}}selected{{end}}>rfp</option>
+          <option value="private_security" {{if eq .Input.Kind "private_security"}}selected{{end}}>private_security</option>
+        </select>
       </label>
 
       <label>
-        Deliverables
-        <textarea name="deliverables" placeholder="One line per deliverable"></textarea>
+        Visibility
+        <select name="visibility" required>
+          <option value="draft" {{if or (eq .Input.Visibility "") (eq .Input.Visibility "draft")}}selected{{end}}>draft</option>
+          <option value="private" {{if eq .Input.Visibility "private"}}selected{{end}}>private</option>
+          <option value="public" {{if eq .Input.Visibility "public"}}selected{{end}}>public</option>
+          <option value="archived" {{if eq .Input.Visibility "archived"}}selected{{end}}>archived</option>
+        </select>
       </label>
+    </div>
 
-      <label>
-        Acceptance Criteria
-        <textarea name="acceptance_criteria" placeholder="One line per acceptance criterion"></textarea>
-      </label>
+    <label>
+      Scope
+      <textarea name="scope" placeholder="One line per scope item">{{.Input.Scope}}</textarea>
+    </label>
 
-      <label>
-        Reward / Quote Model
-        <input type="text" name="reward_model" placeholder="Fixed bounty, quoted engagement, etc.">
-      </label>
+    <label>
+      Deliverables
+      <textarea name="deliverables" placeholder="One line per deliverable">{{.Input.Deliverables}}</textarea>
+    </label>
 
-      <button type="submit">Create Draft</button>
-    </form>
-  </main>
-</body>
-</html>
+    <label>
+      Acceptance Criteria
+      <textarea name="acceptance_criteria" placeholder="One line per acceptance criterion">{{.Input.AcceptanceCriteria}}</textarea>
+    </label>
+
+    <label>
+      Reward / Quote Model
+      <input type="text" name="reward_model" placeholder="Fixed bounty, quoted engagement, etc." value="{{.Input.RewardModel}}">
+    </label>
+
+    <p class="hint">Safety rule: <code>private_security</code> packets are persisted as <code>private</code> visibility.</p>
+    <button type="submit">Create Draft</button>
+  </form>
+</section>
+
+<section class="panel">
+  <h2>Seeded Examples</h2>
+  <ul class="inline-list">
+    <li><a href="/examples/auth-loop">auth-loop</a></li>
+    <li><a href="/examples/webhook-rfq">webhook-rfq</a></li>
+    <li><a href="/examples/pipeline-rfp">pipeline-rfp</a></li>
+  </ul>
+</section>
+{{end}}

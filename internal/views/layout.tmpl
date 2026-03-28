@@ -1,0 +1,181 @@
+{{define "layout"}}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{block "title" .}}Bountystash{{end}}</title>
+  <style>
+    :root {
+      --bg: #f3f6f9;
+      --ink: #13283b;
+      --muted: #4b5f72;
+      --panel: #ffffff;
+      --accent: #0b7285;
+      --accent-soft: #e6f2f4;
+      --border: #d7e1ea;
+      --error: #a61e4d;
+      --error-soft: #fff0f6;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Georgia, "Times New Roman", serif;
+      background:
+        radial-gradient(circle at 10% -10%, rgba(11, 114, 133, 0.08), transparent 38%),
+        radial-gradient(circle at 90% 0%, rgba(19, 40, 59, 0.08), transparent 32%),
+        var(--bg);
+      color: var(--ink);
+      line-height: 1.45;
+    }
+    .shell {
+      width: min(980px, 100%);
+      margin: 0 auto;
+      padding: 24px;
+    }
+    .topnav {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+      font-size: 0.95rem;
+    }
+    .topnav a {
+      color: var(--accent);
+      text-decoration: none;
+      border-bottom: 1px solid transparent;
+    }
+    .topnav a:hover { border-color: var(--accent); }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px;
+      margin-bottom: 16px;
+      box-shadow: 0 8px 24px rgba(19, 40, 59, 0.06);
+    }
+    .error-panel {
+      border-color: #f4c2d7;
+      background: var(--error-soft);
+      color: var(--error);
+    }
+    h1, h2, h3 {
+      margin: 0 0 10px;
+      line-height: 1.15;
+    }
+    p { margin: 0 0 12px; color: var(--muted); }
+    .hero h1 {
+      font-size: clamp(1.9rem, 4vw, 2.7rem);
+      letter-spacing: 0.01em;
+    }
+    .grid {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    }
+    .intake-form {
+      display: grid;
+      gap: 12px;
+    }
+    label {
+      display: grid;
+      gap: 6px;
+      font-size: 0.95rem;
+    }
+    input, select, textarea, button {
+      font: inherit;
+      color: var(--ink);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      background: #fff;
+    }
+    textarea {
+      min-height: 88px;
+      resize: vertical;
+    }
+    button {
+      width: fit-content;
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+      cursor: pointer;
+      padding: 9px 16px;
+    }
+    button:hover { filter: brightness(0.94); }
+    ul {
+      margin: 8px 0 0;
+      padding-left: 20px;
+    }
+    .inline-list {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+    .inline-list a, .queue-title a {
+      color: var(--accent);
+      text-decoration: none;
+      border-bottom: 1px solid transparent;
+    }
+    .inline-list a:hover, .queue-title a:hover { border-color: var(--accent); }
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 8px;
+      font-size: 0.92rem;
+    }
+    .meta-grid .meta-cell {
+      background: var(--accent-soft);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+    .meta-cell strong {
+      display: block;
+      font-size: 0.8rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .hint {
+      font-size: 0.9rem;
+      margin: 0;
+    }
+    .queue {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.95rem;
+    }
+    .queue th, .queue td {
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      padding: 8px 6px;
+      vertical-align: top;
+    }
+    .queue thead th {
+      font-size: 0.82rem;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      color: var(--muted);
+    }
+    @media (max-width: 640px) {
+      .shell { padding: 14px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <nav class="topnav">
+      <a href="/">Intake</a>
+      <a href="/examples/auth-loop">Example</a>
+      <a href="/review">Review Queue</a>
+      <a href="/healthz">Health</a>
+    </nav>
+    {{block "content" .}}{{end}}
+  </main>
+</body>
+</html>
+{{end}}

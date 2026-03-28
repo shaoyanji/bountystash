@@ -1,7 +1,5 @@
 package packets
 
-import "time"
-
 // Kind is the normalized work item kind.
 type Kind string
 
@@ -42,5 +40,4 @@ type NormalizedPacket struct {
 	AcceptanceCriteria []string
 	RewardModel        string
 	Visibility         Visibility
-	NormalizedAt       time.Time
 }

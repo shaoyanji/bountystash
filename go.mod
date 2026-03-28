@@ -1,4 +1,4 @@
-module bountystash
+module github.com/shaoyanji/bountystash
 
 go 1.25.7
 

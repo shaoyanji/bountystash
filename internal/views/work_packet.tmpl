@@ -1,0 +1,21 @@
+{{define "work_packet_sections"}}
+<section class="panel">
+  <h2>Scope</h2>
+  <ul>{{range .Scope}}<li>{{.}}</li>{{else}}<li>None provided.</li>{{end}}</ul>
+</section>
+
+<section class="panel">
+  <h2>Deliverables</h2>
+  <ul>{{range .Deliverables}}<li>{{.}}</li>{{else}}<li>None provided.</li>{{end}}</ul>
+</section>
+
+<section class="panel">
+  <h2>Acceptance Criteria</h2>
+  <ul>{{range .AcceptanceCriteria}}<li>{{.}}</li>{{else}}<li>None provided.</li>{{end}}</ul>
+</section>
+
+<section class="panel">
+  <h2>Reward / Quote Model</h2>
+  <p>{{if .RewardModel}}{{.RewardModel}}{{else}}Not specified.{{end}}</p>
+</section>
+{{end}}

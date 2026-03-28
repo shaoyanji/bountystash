@@ -1,0 +1,67 @@
+{{define "title"}}Review Queue | Bountystash{{end}}
+
+{{define "content"}}
+<section class="hero panel">
+  <h1>Review Queue</h1>
+  <p>Minimal reviewer-facing queue for persisted drafts in <code>open</code> or <code>review</code> status.</p>
+</section>
+
+<section class="panel">
+  <h2>Standard Queue</h2>
+  {{if .Standard}}
+  <table class="queue">
+    <thead>
+      <tr>
+        <th>Title</th>
+        <th>Kind</th>
+        <th>Visibility</th>
+        <th>Status</th>
+        <th>Created</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{range .Standard}}
+      <tr>
+        <td class="queue-title"><a href="/work/{{.ID}}">{{.Title}}</a></td>
+        <td>{{.Kind}}</td>
+        <td>{{.Visibility}}</td>
+        <td>{{.Status}}</td>
+        <td>{{.CreatedAt.Format "2006-01-02 15:04:05 MST"}}</td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{else}}
+  <p>No standard queue items.</p>
+  {{end}}
+</section>
+
+<section class="panel">
+  <h2>Private Security Queue</h2>
+  <p class="hint">Private security items are separated from public-facing flow.</p>
+  {{if .Private}}
+  <table class="queue">
+    <thead>
+      <tr>
+        <th>Title</th>
+        <th>Visibility</th>
+        <th>Status</th>
+        <th>Created</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{range .Private}}
+      <tr>
+        <td class="queue-title"><a href="/work/{{.ID}}">{{.Title}}</a></td>
+        <td>{{.Visibility}}</td>
+        <td>{{.Status}}</td>
+        <td>{{.CreatedAt.Format "2006-01-02 15:04:05 MST"}}</td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{else}}
+  <p>No private security queue items.</p>
+  {{end}}
+</section>
+{{end}}

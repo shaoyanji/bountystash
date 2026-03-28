@@ -5,12 +5,13 @@ import (
 	"net/http"
 	"strings"
 
-	"bountystash/internal/packets"
-	"bountystash/internal/views"
 	"github.com/go-chi/chi/v5"
+
+	"github.com/shaoyanji/bountystash/internal/packets"
+	"github.com/shaoyanji/bountystash/internal/views"
 )
 
-var exampleShowTemplate = template.Must(template.ParseFS(views.FS, "examples_show.tmpl"))
+var exampleShowTemplate = template.Must(views.Parse("examples_show.tmpl", "work_packet.tmpl"))
 
 type exampleShowData struct {
 	Slug   string
@@ -27,7 +28,7 @@ func HandleExampleShow(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := exampleShowTemplate.Execute(w, exampleShowData{
+	if err := exampleShowTemplate.ExecuteTemplate(w, "layout", exampleShowData{
 		Slug:   slug,
 		Packet: example,
 	}); err != nil {

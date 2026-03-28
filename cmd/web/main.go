@@ -4,7 +4,7 @@ import (
 	"log"
 	"net/http"
 
-	"bountystash/internal/app"
+	"github.com/shaoyanji/bountystash/internal/app"
 )
 
 func main() {

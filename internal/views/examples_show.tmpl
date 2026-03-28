@@ -1,54 +1,20 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Example - {{.Slug}}</title>
-  <style>
-    body {
-      font-family: Georgia, "Times New Roman", serif;
-      margin: 0;
-      background: #f9fafb;
-      color: #111827;
-      padding: 24px;
-    }
-    main {
-      max-width: 860px;
-      margin: 0 auto;
-      background: #ffffff;
-      border: 1px solid #e5e7eb;
-      border-radius: 10px;
-      padding: 24px;
-    }
-    h1, h2 { margin-top: 0; }
-    ul { margin-top: 0.25rem; }
-    .meta { color: #374151; }
-    .back { margin-bottom: 16px; display: inline-block; }
-  </style>
-</head>
-<body>
-  <main>
-    <a class="back" href="/">Back</a>
-    <h1>{{.Packet.Title}}</h1>
-    <p class="meta"><strong>Slug:</strong> {{.Slug}}</p>
-    <p class="meta"><strong>Kind:</strong> {{.Packet.Kind}}</p>
-    <p class="meta"><strong>Visibility:</strong> {{.Packet.Visibility}}</p>
-    <p class="meta"><strong>Reward / Quote Model:</strong> {{.Packet.RewardModel}}</p>
+{{define "title"}}Example {{.Slug}} | Bountystash{{end}}
 
-    <section>
-      <h2>Scope</h2>
-      <ul>{{range .Packet.Scope}}<li>{{.}}</li>{{else}}<li>None provided</li>{{end}}</ul>
-    </section>
+{{define "content"}}
+<section class="hero panel">
+  <h1>{{.Packet.Title}}</h1>
+  <p>Seeded example packet <code>{{.Slug}}</code> for deterministic shape and UI preview.</p>
+</section>
 
-    <section>
-      <h2>Deliverables</h2>
-      <ul>{{range .Packet.Deliverables}}<li>{{.}}</li>{{else}}<li>None provided</li>{{end}}</ul>
-    </section>
+<section class="panel">
+  <h2>Example Metadata</h2>
+  <div class="meta-grid">
+    <div class="meta-cell"><strong>Slug</strong>{{.Slug}}</div>
+    <div class="meta-cell"><strong>Kind</strong>{{.Packet.Kind}}</div>
+    <div class="meta-cell"><strong>Visibility</strong>{{.Packet.Visibility}}</div>
+    <div class="meta-cell"><strong>Reward Model</strong>{{if .Packet.RewardModel}}{{.Packet.RewardModel}}{{else}}Not specified{{end}}</div>
+  </div>
+</section>
 
-    <section>
-      <h2>Acceptance Criteria</h2>
-      <ul>{{range .Packet.AcceptanceCriteria}}<li>{{.}}</li>{{else}}<li>None provided</li>{{end}}</ul>
-    </section>
-  </main>
-</body>
-</html>
+{{template "work_packet_sections" .Packet}}
+{{end}}
