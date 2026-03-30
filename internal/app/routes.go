@@ -43,6 +43,7 @@ func NewRouter(cfg Config) (http.Handler, error) {
 	})
 	r.Post("/draft", draftHandler.HandleDraftPost)
 	r.Get("/work/{id}", draftHandler.HandleWorkShow)
+	r.Get("/work/{id}/history", draftHandler.HandleWorkHistory)
 	r.Get("/examples/{slug}", handlers.HandleExampleShow)
 	r.Get("/review", reviewHandler.HandleQueue)
 
@@ -53,6 +54,7 @@ func NewRouter(cfg Config) (http.Handler, error) {
 		api.Get("/review", apiHandler.HandleReview)
 		api.Get("/work", apiHandler.HandleWorkList)
 		api.Get("/work/{id}", apiHandler.HandleWorkShow)
+		api.Get("/work/{id}/history", apiHandler.HandleWorkHistory)
 		api.Post("/draft", apiHandler.HandleDraftCreate)
 	})
 

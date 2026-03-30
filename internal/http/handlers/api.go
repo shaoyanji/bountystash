@@ -44,6 +44,11 @@ type draftCreateRequest struct {
 	Visibility         string `json:"visibility"`
 }
 
+type historyResponse struct {
+	WorkItemID string          `json:"work_item_id"`
+	Events     []service.Event `json:"events"`
+}
+
 func NewAPIHandler(svc service.WorkService) *APIHandler {
 	return &APIHandler{svc: svc}
 }
@@ -108,6 +113,34 @@ func (h *APIHandler) HandleWorkShow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, work)
+}
+
+func (h *APIHandler) HandleWorkHistory(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimSpace(chi.URLParam(r, "id"))
+	if !isUUID(id) {
+		writeJSON(w, http.StatusNotFound, apiError{Error: "work item not found"})
+		return
+	}
+
+	if _, err := h.svc.GetWork(r.Context(), id); err != nil {
+		if err == sql.ErrNoRows {
+			writeJSON(w, http.StatusNotFound, apiError{Error: "work item not found"})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, apiError{Error: "load work item"})
+		return
+	}
+
+	events, err := h.svc.WorkHistory(r.Context(), id)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, apiError{Error: "load work history"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, historyResponse{
+		WorkItemID: id,
+		Events:     events,
+	})
 }
 
 func (h *APIHandler) HandleWorkList(w http.ResponseWriter, r *http.Request) {

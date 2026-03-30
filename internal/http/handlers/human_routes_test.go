@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/shaoyanji/bountystash/internal/packets"
+	"github.com/shaoyanji/bountystash/internal/service"
 )
 
 func TestHandleHomeBrowserGetsHTML(t *testing.T) {
@@ -288,6 +290,94 @@ func withRouteParam(req *http.Request, key, value string) *http.Request {
 	routeCtx := chi.NewRouteContext()
 	routeCtx.URLParams.Add(key, value)
 	return req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, routeCtx))
+}
+
+func TestHandleWorkHistoryBrowser(t *testing.T) {
+	const workID = "00000000-0000-1000-8000-000000000001"
+	svc := stubService{
+		get: func(ctx context.Context, id string) (service.WorkDetail, error) {
+			return service.WorkDetail{
+				ID: workID,
+				Packet: packets.NormalizedPacket{
+					Title: "History test",
+				},
+			}, nil
+		},
+		history: func(ctx context.Context, id string) ([]service.Event, error) {
+			return []service.Event{
+				{
+					ID:         "evt1",
+					EventType:  "work_version_persisted",
+					WorkItemID: workID,
+					CreatedAt:  time.Date(2026, 3, 30, 12, 0, 0, 0, time.UTC),
+					Payload:    json.RawMessage(`{"version_number":1,"exact_hash":"foo","quotient_hash":"bar"}`),
+				},
+			}, nil
+		},
+	}
+
+	h, err := NewDraftHandler(svc)
+	if err != nil {
+		t.Fatalf("new draft handler: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/work/"+workID+"/history", nil)
+	req.Header.Set("Accept", "text/html")
+	req = withRouteParam(req, "id", workID)
+	rec := httptest.NewRecorder()
+
+	h.HandleWorkHistory(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "Work history") || !strings.Contains(body, "Version 1 persisted") {
+		t.Fatalf("unexpected body:\n%s", body)
+	}
+}
+
+func TestHandleWorkHistoryMarkdown(t *testing.T) {
+	const workID = "00000000-0000-1000-8000-000000000002"
+	svc := stubService{
+		get: func(ctx context.Context, id string) (service.WorkDetail, error) {
+			return service.WorkDetail{ID: workID}, nil
+		},
+		history: func(ctx context.Context, id string) ([]service.Event, error) {
+			return []service.Event{
+				{
+					ID:         "evt2",
+					EventType:  "intake_validation_failed",
+					WorkItemID: workID,
+					CreatedAt:  time.Date(2026, 3, 30, 13, 0, 0, 0, time.UTC),
+					Payload:    json.RawMessage(`{"errors":{"title":"Title required"}}`),
+				},
+			}, nil
+		},
+	}
+
+	h, err := NewDraftHandler(svc)
+	if err != nil {
+		t.Fatalf("new draft handler: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/work/"+workID+"/history", nil)
+	req.Header.Set("User-Agent", "curl/8.0.1")
+	req = withRouteParam(req, "id", workID)
+	rec := httptest.NewRecorder()
+
+	h.HandleWorkHistory(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if got := rec.Header().Get("Content-Type"); got != "text/markdown; charset=utf-8" {
+		t.Fatalf("content-type = %q, want markdown", got)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "Validation failed") || !strings.Contains(body, "title: Title required") {
+		t.Fatalf("unexpected markdown body:\n%s", body)
+	}
 }
 
 func seededPacket() packets.NormalizedPacket {

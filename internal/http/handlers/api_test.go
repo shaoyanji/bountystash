@@ -2,10 +2,16 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+
+	"github.com/shaoyanji/bountystash/internal/service"
 )
 
 func TestAPIHealthz(t *testing.T) {
@@ -95,4 +101,49 @@ func TestAPIWorkShowRejectsInvalidID(t *testing.T) {
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNotFound)
 	}
+}
+
+func TestAPIWorkHistoryReturnsEvents(t *testing.T) {
+	const workID = "00000000-0000-1000-8000-000000000001"
+	svc := stubService{
+		get: func(ctx context.Context, id string) (service.WorkDetail, error) {
+			return service.WorkDetail{ID: workID}, nil
+		},
+		history: func(ctx context.Context, id string) ([]service.Event, error) {
+			return []service.Event{
+				{
+					ID:         "evt1",
+					EventType:  "intake_received",
+					WorkItemID: workID,
+					CreatedAt:  time.Date(2026, 3, 30, 12, 0, 0, 0, time.UTC),
+					Payload:    json.RawMessage(`{"title":"history test"}`),
+				},
+			}, nil
+		},
+	}
+	h := NewAPIHandler(svc)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/work/"+workID+"/history", nil)
+	req = withAPIParam(req, "id", workID)
+	rec := httptest.NewRecorder()
+
+	h.HandleWorkHistory(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	var payload historyResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if payload.WorkItemID != workID || len(payload.Events) != 1 {
+		t.Fatalf("unexpected history payload: %+v", payload)
+	}
+}
+
+func withAPIParam(req *http.Request, key, value string) *http.Request {
+	routeCtx := chi.NewRouteContext()
+	routeCtx.URLParams.Add(key, value)
+	return req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, routeCtx))
 }

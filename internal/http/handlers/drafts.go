@@ -22,6 +22,7 @@ type DraftHandler struct {
 	svc              service.WorkService
 	homeTemplate     *template.Template
 	workShowTemplate *template.Template
+	historyTemplate  *template.Template
 }
 
 type DraftCreateResult struct {
@@ -64,10 +65,16 @@ func NewDraftHandler(svc service.WorkService) (*DraftHandler, error) {
 		return nil, err
 	}
 
+	historyTemplate, err := views.Parse("history.tmpl")
+	if err != nil {
+		return nil, err
+	}
+
 	return &DraftHandler{
 		svc:              svc,
 		homeTemplate:     homeTemplate,
 		workShowTemplate: workShowTemplate,
+		historyTemplate:  historyTemplate,
 	}, nil
 }
 
@@ -171,6 +178,63 @@ func (h *DraftHandler) HandleWorkShow(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := h.workShowTemplate.ExecuteTemplate(w, "layout", data); err != nil {
+		http.Error(w, "template render error", http.StatusInternalServerError)
+	}
+}
+
+func (h *DraftHandler) HandleWorkHistory(w http.ResponseWriter, r *http.Request) {
+	det := humanRouteRepresentation(r)
+	id := strings.TrimSpace(chi.URLParam(r, "id"))
+	if !isUUID(id) {
+		if det.Representation == represent.RepresentationHTML {
+			http.NotFound(w, r)
+			return
+		}
+		writeHumanDocument(w, http.StatusNotFound, det.Representation, errorDocument("Not found", r.URL.Path, http.StatusNotFound, []string{"work item not found"}))
+		return
+	}
+
+	work, err := h.FetchCurrentPacket(r.Context(), id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			if det.Representation == represent.RepresentationHTML {
+				http.NotFound(w, r)
+				return
+			}
+			writeHumanDocument(w, http.StatusNotFound, det.Representation, errorDocument("Not found", r.URL.Path, http.StatusNotFound, []string{"work item not found"}))
+			return
+		}
+		if det.Representation == represent.RepresentationHTML {
+			http.Error(w, "load work history", http.StatusInternalServerError)
+			return
+		}
+		writeHumanDocument(w, http.StatusInternalServerError, det.Representation, errorDocument("Backend error", r.URL.Path, http.StatusInternalServerError, []string{"load work history"}))
+		return
+	}
+
+	events, err := h.svc.WorkHistory(r.Context(), id)
+	if err != nil {
+		if det.Representation == represent.RepresentationHTML {
+			http.Error(w, "load work history", http.StatusInternalServerError)
+			return
+		}
+		writeHumanDocument(w, http.StatusInternalServerError, det.Representation, errorDocument("Backend error", r.URL.Path, http.StatusInternalServerError, []string{"load work history"}))
+		return
+	}
+
+	historyEntries := summarizeHistoryEvents(events)
+
+	if det.Representation != represent.RepresentationHTML {
+		writeHumanDocument(w, http.StatusOK, det.Representation, historyDocument(work.ID, historyEntries))
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := h.historyTemplate.ExecuteTemplate(w, "layout", historyPageData{
+		WorkID:    work.ID,
+		WorkTitle: work.Packet.Title,
+		Entries:   historyEntries,
+	}); err != nil {
 		http.Error(w, "template render error", http.StatusInternalServerError)
 	}
 }

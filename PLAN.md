@@ -54,6 +54,8 @@ The implementation is successful for this phase when the following work end-to-e
 6. exact hash and quotient hash are computed and stored for each created version.
 7. `private_security` items default to private visibility.
 8. a minimal review queue page exists and renders queued drafts or review candidates.
+9. `GET /work/{id}/history` surfaces a curated timeline derived from `backend_events`.
+10. `GET /api/work/{id}/history` returns the structured `backend_events` payloads for the requested work item.
 
 ---
 
@@ -209,6 +211,7 @@ Required outputs:
 - a dedicated Go `service` layer that owns validation → normalization → hashing → persistence and that can be called from all surfaces instead of repeating SQL logic.
 - an append-only `backend_events` table that timestamps intake_received, packet_normalized, work_item_created, work_version_persisted, review_queue_read, and similar domain events so the relational tables remain projections derived from the logged history.
 - documentation and automation that clarify the projection versus event story so future work can reuse the event trail for ledger/graph/stream use cases without rewriting the routes.
+- thin read-only history surfaces (`GET /work/{id}/history` and `/api/work/{id}/history`) so operators can inspect the key intake/validation/persistence events without turning the event trail into a general activity framework.
 
 ---
 
@@ -346,6 +349,24 @@ Acceptance:
 Important note:
 
 Do not start here before the review flow exists.
+
+---
+
+### Phase 9 — event history read surfaces (0.1.8)
+
+Goal: read the `backend_events` append-only trail without adding new writers. Operators and tooling should rely on one thin service boundary that knows how to order event rows and summarize them for humans.
+
+Current focus:
+
+- `service.WorkHistory` reuses the authoritative backend seam to query `backend_events` for a work item, ordered by `created_at` and staying consistent with the write path.
+- `GET /work/{id}/history` renders a human-friendly timeline that highlights intake, validation failures, normalization, and persistence events while keeping raw payloads out of the default view.
+- `GET /api/work/{id}/history` returns the structured event rows for tooling and the TUI, preserving the full payloads and metadata.
+
+Acceptance:
+
+- the human route renders readable timestamps, summaries, and detail lists without exposing unnecessary event types.
+- the JSON route stays faithful to the `backend_events` schema, including event ID, timestamps, type, work item/id, optional work version ID, and payload.
+- all handlers remain thin, delegating ordering and payload normalization to the service so no duplicate query logic creeps into the routes.
 
 ---
 

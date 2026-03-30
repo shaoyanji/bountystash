@@ -14,11 +14,9 @@ Current product shape:
 - First non-browser representation pass for human-facing routes (`html`, `md`, `text`)
 - Static manifest/discovery surface for agents and curl clients
 
-Current release target: `0.1.6` (adds a canonical discovery manifest so non-browser clients can find safe routes without scraping).
+Current release target: `0.1.8`. The 0.1.7 backend pass introduced the shared Go `service` seam and append-only `backend_events` trail (intake_received, packet_normalized, work_item_created, work_version_persisted, review_queue_read, etc.), so the relational tables now serve as projections derived from the durable event history. HTML, JSON, and TUI routes reuse that seam instead of duplicating persistence logic.
 
-The 0.1.7 backend pass adds a shared Go `service` layer plus an append-only `backend_events` table so the relational tables become projections over a durable event trail (intake_received, packet_normalized, work_item_created, work_version_persisted, review_queue_read, etc.). HTML, JSON, and TUI routes now call the service seam instead of duplicating persistence, letting work_items/work_versions stay immutable projections derived from the event history while the event chain component can grow independently.
-
-The 0.1.7 backend pass adds a shared Go `service` layer plus an append-only `backend_events` table so the relational tables become projections over a durable event trail (intake_received, packet_normalized, work_item_created, work_version_persisted, review_queue_read, etc.). HTML, JSON, and TUI routes now call the service seam instead of duplicating persistence, letting work_items/work_versions stay immutable projections derived from the event history while the event chain component can grow independently.
+Release 0.1.8 makes the append-only trail readable. `GET /work/{id}/history` renders a human-friendly, curated timeline of intake, validation, normalization, and persistence events, while `GET /api/work/{id}/history` returns the structured `backend_events` payloads for tooling. The human view intentionally highlights only operationally meaningful events so operators can scan the sequence without dumping raw JSON, keeping the event trail clearly developer/operator-facing.
 
 ## Current Milestone Scope
 
@@ -29,6 +27,7 @@ The 0.1.7 backend pass adds a shared Go `service` layer plus an append-only `bac
 - `GET /review` minimal reviewer queue (with private security separated)
 - `GET /healthz` health probe
 - `GET /.well-known/bountystash-manifest` static discovery manifest for curl/agents
+- `GET /work/{id}/history` curated human history timeline based on `backend_events`
 - Human-facing route representation rules:
   - Browser-like requests keep HTML on `GET /`, `GET /work/{id}`, `GET /examples/{slug}`, and `GET /review`
   - Non-browser requests to those routes default to readable markdown
@@ -43,6 +42,7 @@ The 0.1.7 backend pass adds a shared Go `service` layer plus an append-only `bac
   - `GET /api/review`
   - `GET /api/work`
   - `GET /api/work/{id}`
+  - `GET /api/work/{id}/history`
   - `POST /api/draft`
 
 ## Run Web

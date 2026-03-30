@@ -25,6 +25,7 @@ type WorkService interface {
 	GetWork(context.Context, string) (WorkDetail, error)
 	ListRecentWork(context.Context, int) ([]WorkSummary, error)
 	ReviewQueue(context.Context) (ReviewQueueData, error)
+	WorkHistory(context.Context, string) ([]Event, error)
 }
 
 type Service struct {
@@ -57,6 +58,15 @@ type WorkSummary struct {
 type ReviewQueueData struct {
 	Standard []WorkSummary `json:"standard"`
 	Private  []WorkSummary `json:"private"`
+}
+
+type Event struct {
+	ID            string          `json:"id"`
+	EventType     string          `json:"event_type"`
+	WorkItemID    string          `json:"work_item_id"`
+	WorkVersionID *string         `json:"work_version_id"`
+	Payload       json.RawMessage `json:"payload"`
+	CreatedAt     time.Time       `json:"created_at"`
 }
 
 type eventType string
@@ -340,6 +350,52 @@ func (s *Service) ReviewQueue(ctx context.Context) (ReviewQueueData, error) {
 	}
 
 	return data, nil
+}
+
+func (s *Service) WorkHistory(ctx context.Context, workID string) ([]Event, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, event_type, work_item_id, work_version_id, payload, created_at
+		FROM backend_events
+		WHERE work_item_id = $1
+		ORDER BY created_at ASC
+	`, workID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]Event, 0)
+	for rows.Next() {
+		var (
+			event        Event
+			payloadBytes []byte
+			versionID    sql.NullString
+		)
+		if err := rows.Scan(
+			&event.ID,
+			&event.EventType,
+			&event.WorkItemID,
+			&versionID,
+			&payloadBytes,
+			&event.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		if versionID.Valid {
+			event.WorkVersionID = ptrString(versionID.String)
+		} else {
+			event.WorkVersionID = nil
+		}
+		if payloadBytes != nil {
+			event.Payload = append(json.RawMessage(nil), payloadBytes...)
+		}
+		out = append(out, event)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (s *Service) recordEvent(ctx context.Context, tx *sql.Tx, typ eventType, workItemID, workVersionID *string, payload map[string]any) error {
