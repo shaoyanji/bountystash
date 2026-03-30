@@ -9,7 +9,7 @@ import (
 )
 
 func TestAPIHealthz(t *testing.T) {
-	h := NewAPIHandler(nil, nil)
+	h := NewAPIHandler(stubService{})
 	req := httptest.NewRequest(http.MethodGet, "/api/healthz", nil)
 	rec := httptest.NewRecorder()
 
@@ -29,7 +29,7 @@ func TestAPIHealthz(t *testing.T) {
 }
 
 func TestAPIExamplesStableShape(t *testing.T) {
-	h := NewAPIHandler(nil, nil)
+	h := NewAPIHandler(stubService{})
 	req := httptest.NewRequest(http.MethodGet, "/api/examples", nil)
 	rec := httptest.NewRecorder()
 
@@ -59,7 +59,7 @@ func TestAPIExamplesStableShape(t *testing.T) {
 }
 
 func TestAPIDraftCreateValidationErrors(t *testing.T) {
-	h := NewAPIHandler(&DraftHandler{}, nil)
+	h := NewAPIHandler(validationStubService())
 	reqBody := `{"title":"","kind":"bad_kind","visibility":"wat"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/draft", bytes.NewBufferString(reqBody))
 	rec := httptest.NewRecorder()
@@ -86,7 +86,7 @@ func TestAPIDraftCreateValidationErrors(t *testing.T) {
 }
 
 func TestAPIWorkShowRejectsInvalidID(t *testing.T) {
-	h := NewAPIHandler(&DraftHandler{}, nil)
+	h := NewAPIHandler(stubService{})
 	req := httptest.NewRequest(http.MethodGet, "/api/work/not-a-uuid", nil)
 	rec := httptest.NewRecorder()
 

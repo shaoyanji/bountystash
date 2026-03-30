@@ -8,6 +8,8 @@ This file defines how agents should work in this repo.
 
 The goal is **safe, incremental implementation** of the repo skeleton without drifting into speculative architecture or accidental rewrites.
 
+0.1.7 is a backend plumbing pass that wires a single authoritative `service` layer for create/read/review flows and records every key step in an append-only `backend_events` table (intake_received, packet_normalized, work_item_created, work_version_persisted, review_queue_read, etc.). HTTP routes remain projections, not the source of truth, and the event trail is the durable history that later phases can build on.
+
 ---
 
 ## Product shape

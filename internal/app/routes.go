@@ -7,6 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/shaoyanji/bountystash/internal/http/handlers"
+	"github.com/shaoyanji/bountystash/internal/service"
 )
 
 // NewRouter wires the thin 0.1 HTTP surface.
@@ -16,18 +17,20 @@ func NewRouter(cfg Config) (http.Handler, error) {
 		return nil, err
 	}
 
-	draftHandler, err := handlers.NewDraftHandler(db)
+	svc := service.NewService(db)
+
+	draftHandler, err := handlers.NewDraftHandler(svc)
 	if err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("initialize draft handler: %w", err)
 	}
 
-	reviewHandler, err := handlers.NewReviewHandler(db)
+	reviewHandler, err := handlers.NewReviewHandler(svc)
 	if err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("initialize review handler: %w", err)
 	}
-	apiHandler := handlers.NewAPIHandler(draftHandler, reviewHandler)
+	apiHandler := handlers.NewAPIHandler(svc)
 
 	r := chi.NewRouter()
 

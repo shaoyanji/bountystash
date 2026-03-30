@@ -200,6 +200,18 @@ Near-term improvement:
 
 ---
 
+### Phase 4 — backend plumbing (0.1.7)
+
+Goal: harden the backend seam by centralizing semantics and recording the canonical event trail without changing the current HTML/API surface.
+
+Required outputs:
+
+- a dedicated Go `service` layer that owns validation → normalization → hashing → persistence and that can be called from all surfaces instead of repeating SQL logic.
+- an append-only `backend_events` table that timestamps intake_received, packet_normalized, work_item_created, work_version_persisted, review_queue_read, and similar domain events so the relational tables remain projections derived from the logged history.
+- documentation and automation that clarify the projection versus event story so future work can reuse the event trail for ledger/graph/stream use cases without rewriting the routes.
+
+---
+
 ### Phase 4 — persisted create/read flow
 
 Goal: make drafts real persisted work items.

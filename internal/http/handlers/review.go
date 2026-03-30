@@ -2,45 +2,49 @@ package handlers
 
 import (
 	"context"
-	"database/sql"
-	"encoding/json"
+	"errors"
 	"html/template"
 	"net/http"
 	"time"
 
 	"github.com/shaoyanji/bountystash/internal/http/represent"
 	"github.com/shaoyanji/bountystash/internal/packets"
+	"github.com/shaoyanji/bountystash/internal/service"
 	"github.com/shaoyanji/bountystash/internal/views"
 )
 
 type ReviewHandler struct {
-	db            *sql.DB
+	svc           service.WorkService
 	reviewTmpl    *template.Template
 	standardLimit int
 }
 
 type ReviewRow struct {
-	ID         string
-	Title      string
-	Kind       packets.Kind
-	Visibility packets.Visibility
-	Status     string
-	CreatedAt  time.Time
+	ID         string             `json:"id"`
+	Title      string             `json:"title"`
+	Kind       packets.Kind       `json:"kind"`
+	Visibility packets.Visibility `json:"visibility"`
+	Status     string             `json:"status"`
+	CreatedAt  time.Time          `json:"created_at"`
 }
 
 type ReviewQueueData struct {
-	Standard []ReviewRow
-	Private  []ReviewRow
+	Standard []ReviewRow `json:"standard"`
+	Private  []ReviewRow `json:"private"`
 }
 
-func NewReviewHandler(db *sql.DB) (*ReviewHandler, error) {
+func NewReviewHandler(svc service.WorkService) (*ReviewHandler, error) {
+	if svc == nil {
+		return nil, errors.New("service is required")
+	}
+
 	tmpl, err := views.Parse("review_queue.tmpl")
 	if err != nil {
 		return nil, err
 	}
 
 	return &ReviewHandler{
-		db:            db,
+		svc:           svc,
 		reviewTmpl:    tmpl,
 		standardLimit: 100,
 	}, nil
@@ -70,61 +74,35 @@ func (h *ReviewHandler) HandleQueue(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ReviewHandler) FetchQueue(ctx context.Context) (ReviewQueueData, error) {
-	rows, err := h.fetchQueueRows(ctx)
+	if h.svc == nil {
+		return ReviewQueueData{}, errors.New("service is not initialized")
+	}
+
+	queue, err := h.svc.ReviewQueue(ctx)
 	if err != nil {
 		return ReviewQueueData{}, err
 	}
 
-	data := ReviewQueueData{
-		Standard: make([]ReviewRow, 0, len(rows)),
-		Private:  make([]ReviewRow, 0, len(rows)),
-	}
-	for _, row := range rows {
-		if row.Kind == packets.KindPrivateSecurity {
-			data.Private = append(data.Private, row)
-			continue
-		}
-		data.Standard = append(data.Standard, row)
-	}
-
-	return data, nil
+	return ReviewQueueData{
+		Standard: toReviewRows(queue.Standard),
+		Private:  toReviewRows(queue.Private),
+	}, nil
 }
 
-func (h *ReviewHandler) fetchQueueRows(ctx context.Context) ([]ReviewRow, error) {
-	rows, err := h.db.QueryContext(ctx, `
-		SELECT wi.id, wi.kind, wi.visibility, wi.status, wi.created_at, wv.packet
-		FROM work_items AS wi
-		JOIN work_versions AS wv
-		  ON wv.work_item_id = wi.id
-		 AND wv.id = wi.current_version_id
-		WHERE wi.status IN ('open', 'review')
-		ORDER BY wi.created_at DESC
-		LIMIT $1
-	`, h.standardLimit)
-	if err != nil {
-		return nil, err
+func toReviewRows(summaries []service.WorkSummary) []ReviewRow {
+	if len(summaries) == 0 {
+		return nil
 	}
-	defer rows.Close()
-
-	out := make([]ReviewRow, 0, h.standardLimit)
-	for rows.Next() {
-		var (
-			row       ReviewRow
-			packet    packets.NormalizedPacket
-			rawPacket []byte
-		)
-		if err := rows.Scan(&row.ID, &row.Kind, &row.Visibility, &row.Status, &row.CreatedAt, &rawPacket); err != nil {
-			return nil, err
-		}
-		if err := json.Unmarshal(rawPacket, &packet); err != nil {
-			return nil, err
-		}
-		row.Title = packet.Title
-		out = append(out, row)
+	out := make([]ReviewRow, 0, len(summaries))
+	for _, summary := range summaries {
+		out = append(out, ReviewRow{
+			ID:         summary.ID,
+			Title:      summary.Title,
+			Kind:       summary.Kind,
+			Visibility: summary.Visibility,
+			Status:     summary.Status,
+			CreatedAt:  summary.CreatedAt,
+		})
 	}
-
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return out, nil
+	return out
 }

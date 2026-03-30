@@ -14,7 +14,7 @@ import (
 )
 
 func TestHandleHomeBrowserGetsHTML(t *testing.T) {
-	h, err := NewDraftHandler(nil)
+	h, err := NewDraftHandler(stubService{})
 	if err != nil {
 		t.Fatalf("new draft handler: %v", err)
 	}
@@ -35,7 +35,7 @@ func TestHandleHomeBrowserGetsHTML(t *testing.T) {
 }
 
 func TestHandleHomeNonBrowserDefaultsToMarkdown(t *testing.T) {
-	h, err := NewDraftHandler(nil)
+	h, err := NewDraftHandler(stubService{})
 	if err != nil {
 		t.Fatalf("new draft handler: %v", err)
 	}
@@ -58,7 +58,7 @@ func TestHandleHomeNonBrowserDefaultsToMarkdown(t *testing.T) {
 }
 
 func TestHandleHomeTextOverride(t *testing.T) {
-	h, err := NewDraftHandler(nil)
+	h, err := NewDraftHandler(stubService{})
 	if err != nil {
 		t.Fatalf("new draft handler: %v", err)
 	}
@@ -171,7 +171,7 @@ func TestHandleExampleShowNonBrowserNotFoundIsReadable(t *testing.T) {
 }
 
 func TestHandleDraftPostValidationErrorsNonBrowser(t *testing.T) {
-	h, err := NewDraftHandler(nil)
+	h, err := NewDraftHandler(validationStubService())
 	if err != nil {
 		t.Fatalf("new draft handler: %v", err)
 	}
@@ -198,7 +198,7 @@ func TestHandleDraftPostValidationErrorsNonBrowser(t *testing.T) {
 }
 
 func TestHandleDraftPostValidationErrorsBrowserStillHTML(t *testing.T) {
-	h, err := NewDraftHandler(nil)
+	h, err := NewDraftHandler(validationStubService())
 	if err != nil {
 		t.Fatalf("new draft handler: %v", err)
 	}
@@ -221,7 +221,7 @@ func TestHandleDraftPostValidationErrorsBrowserStillHTML(t *testing.T) {
 }
 
 func TestAPIExamplesRemainJSONWithFormatOverride(t *testing.T) {
-	h := NewAPIHandler(nil, nil)
+	h := NewAPIHandler(stubService{})
 	req := httptest.NewRequest(http.MethodGet, "/api/examples?format=text", nil)
 	rec := httptest.NewRecorder()
 

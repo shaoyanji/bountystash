@@ -16,6 +16,10 @@ Current product shape:
 
 Current release target: `0.1.6` (adds a canonical discovery manifest so non-browser clients can find safe routes without scraping).
 
+The 0.1.7 backend pass adds a shared Go `service` layer plus an append-only `backend_events` table so the relational tables become projections over a durable event trail (intake_received, packet_normalized, work_item_created, work_version_persisted, review_queue_read, etc.). HTML, JSON, and TUI routes now call the service seam instead of duplicating persistence, letting work_items/work_versions stay immutable projections derived from the event history while the event chain component can grow independently.
+
+The 0.1.7 backend pass adds a shared Go `service` layer plus an append-only `backend_events` table so the relational tables become projections over a durable event trail (intake_received, packet_normalized, work_item_created, work_version_persisted, review_queue_read, etc.). HTML, JSON, and TUI routes now call the service seam instead of duplicating persistence, letting work_items/work_versions stay immutable projections derived from the event history while the event chain component can grow independently.
+
 ## Current Milestone Scope
 
 - `GET /` intake form

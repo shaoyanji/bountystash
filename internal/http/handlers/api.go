@@ -10,11 +10,11 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/shaoyanji/bountystash/internal/packets"
+	"github.com/shaoyanji/bountystash/internal/service"
 )
 
 type APIHandler struct {
-	drafts *DraftHandler
-	review *ReviewHandler
+	svc service.WorkService
 }
 
 type apiError struct {
@@ -44,11 +44,8 @@ type draftCreateRequest struct {
 	Visibility         string `json:"visibility"`
 }
 
-func NewAPIHandler(drafts *DraftHandler, review *ReviewHandler) *APIHandler {
-	return &APIHandler{
-		drafts: drafts,
-		review: review,
-	}
+func NewAPIHandler(svc service.WorkService) *APIHandler {
+	return &APIHandler{svc: svc}
 }
 
 func (h *APIHandler) HandleHealthz(w http.ResponseWriter, _ *http.Request) {
@@ -83,14 +80,14 @@ func (h *APIHandler) HandleExampleShow(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *APIHandler) HandleReview(w http.ResponseWriter, r *http.Request) {
-	queue, err := h.review.FetchQueue(r.Context())
+	queue, err := h.svc.ReviewQueue(r.Context())
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: "load review queue"})
 		return
 	}
 	writeJSON(w, http.StatusOK, reviewResponse{
-		Standard: queue.Standard,
-		Private:  queue.Private,
+		Standard: toReviewRows(queue.Standard),
+		Private:  toReviewRows(queue.Private),
 	})
 }
 
@@ -101,7 +98,7 @@ func (h *APIHandler) HandleWorkShow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	work, err := h.drafts.FetchCurrentPacket(r.Context(), id)
+	work, err := h.svc.GetWork(r.Context(), id)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			writeJSON(w, http.StatusNotFound, apiError{Error: "work item not found"})
@@ -124,12 +121,23 @@ func (h *APIHandler) HandleWorkList(w http.ResponseWriter, r *http.Request) {
 		limit = parsed
 	}
 
-	work, err := h.drafts.FetchRecentWork(r.Context(), limit)
+	summaries, err := h.svc.ListRecentWork(r.Context(), limit)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: "load work list"})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": work})
+	items := make([]WorkListRow, 0, len(summaries))
+	for _, summary := range summaries {
+		items = append(items, WorkListRow{
+			ID:         summary.ID,
+			Title:      summary.Title,
+			Kind:       summary.Kind,
+			Visibility: summary.Visibility,
+			Status:     summary.Status,
+			CreatedAt:  summary.CreatedAt,
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
 func (h *APIHandler) HandleDraftCreate(w http.ResponseWriter, r *http.Request) {
@@ -139,7 +147,7 @@ func (h *APIHandler) HandleDraftCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, validationErrs, err := h.drafts.CreateDraft(r.Context(), packets.DraftInput{
+	result, validationErrs, err := h.svc.CreateWork(r.Context(), packets.DraftInput{
 		Title:              req.Title,
 		Kind:               req.Kind,
 		Scope:              req.Scope,
