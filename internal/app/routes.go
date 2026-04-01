@@ -41,6 +41,7 @@ func NewRouter(cfg Config) (http.Handler, error) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
 	})
+	r.Get("/history", draftHandler.HandleSystemHistory)
 	r.Post("/draft", draftHandler.HandleDraftPost)
 	r.Get("/work/{id}", draftHandler.HandleWorkShow)
 	r.Get("/work/{id}/history", draftHandler.HandleWorkHistory)
@@ -55,6 +56,7 @@ func NewRouter(cfg Config) (http.Handler, error) {
 		api.Get("/work", apiHandler.HandleWorkList)
 		api.Get("/work/{id}", apiHandler.HandleWorkShow)
 		api.Get("/work/{id}/history", apiHandler.HandleWorkHistory)
+		api.Get("/events/recent", apiHandler.HandleRecentEvents)
 		api.Post("/draft", apiHandler.HandleDraftCreate)
 	})
 

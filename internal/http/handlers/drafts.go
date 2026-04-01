@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -48,6 +49,10 @@ type WorkListRow struct {
 type homeData struct {
 	Input  packets.DraftInput
 	Errors map[string]string
+}
+
+type systemHistoryPageData struct {
+	Entries []historyEntry
 }
 
 func NewDraftHandler(svc service.WorkService) (*DraftHandler, error) {
@@ -234,6 +239,51 @@ func (h *DraftHandler) HandleWorkHistory(w http.ResponseWriter, r *http.Request)
 		WorkID:    work.ID,
 		WorkTitle: work.Packet.Title,
 		Entries:   historyEntries,
+	}); err != nil {
+		http.Error(w, "template render error", http.StatusInternalServerError)
+	}
+}
+
+func (h *DraftHandler) HandleSystemHistory(w http.ResponseWriter, r *http.Request) {
+	det := humanRouteRepresentation(r)
+
+	limit := defaultListLimit
+	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil {
+			if det.Representation == represent.RepresentationHTML {
+				http.Error(w, "invalid limit", http.StatusBadRequest)
+				return
+			}
+			writeHumanDocument(w, http.StatusBadRequest, det.Representation, errorDocument("Invalid request", r.URL.Path, http.StatusBadRequest, []string{"invalid limit parameter"}))
+			return
+		}
+		if parsed <= 0 || parsed > maxListLimit {
+			parsed = defaultListLimit
+		}
+		limit = parsed
+	}
+
+	events, err := h.svc.RecentEvents(r.Context(), limit)
+	if err != nil {
+		if det.Representation == represent.RepresentationHTML {
+			http.Error(w, "load recent events", http.StatusInternalServerError)
+			return
+		}
+		writeHumanDocument(w, http.StatusInternalServerError, det.Representation, errorDocument("Backend error", r.URL.Path, http.StatusInternalServerError, []string{"load recent events"}))
+		return
+	}
+
+	entries := summarizeSystemHistoryEvents(events)
+
+	if det.Representation != represent.RepresentationHTML {
+		writeHumanDocument(w, http.StatusOK, det.Representation, systemHistoryDocument(entries))
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := h.historyTemplate.ExecuteTemplate(w, "layout", systemHistoryPageData{
+		Entries: entries,
 	}); err != nil {
 		http.Error(w, "template render error", http.StatusInternalServerError)
 	}

@@ -10,6 +10,8 @@ The goal is **safe, incremental implementation** of the repo skeleton without dr
 
 0.1.7 is a backend plumbing pass that wires a single authoritative `service` layer for create/read/review flows and records every key step in an append-only `backend_events` table (intake_received, packet_normalized, work_item_created, work_version_persisted, review_queue_read, etc.). HTTP routes remain projections, not the source of truth, and the event trail is the durable history that later phases can build on. Version 0.1.8 adds a thin read surface (`GET /work/{id}/history` and `/api/work/{id}/history`) so operators can inspect the curated timeline of intake/validation/persistence events without transforming this trail into a full activity framework. Keep the human history route focused on the handful of operational events (intake accepted, validation failure, packet normalization, version persistence) and keep it cheap; the JSON route can remain close to `backend_events` so tooling still gets the raw payloads. Let the shared `service.WorkHistory` boundary own ordering and any payload summarization helpers to avoid scattering SQL across handlers.
 
+Version 0.1.9 completes the backend plumbing with a system-wide recent activity ledger (`GET /history` and `/api/events/recent`) so the append-only trail is operationally useful across the system before 0.2. The shared `service.RecentEvents` boundary owns ordering, limit enforcement, and event mapping, keeping handlers thin and avoiding duplicate query logic.
+
 ---
 
 ## Product shape

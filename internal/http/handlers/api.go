@@ -13,6 +13,11 @@ import (
 	"github.com/shaoyanji/bountystash/internal/service"
 )
 
+const (
+	maxListLimit     = 100
+	defaultListLimit = 25
+)
+
 type APIHandler struct {
 	svc service.WorkService
 }
@@ -47,6 +52,11 @@ type draftCreateRequest struct {
 type historyResponse struct {
 	WorkItemID string          `json:"work_item_id"`
 	Events     []service.Event `json:"events"`
+}
+
+type recentEventsResponse struct {
+	Events []service.Event `json:"events"`
+	Limit  int             `json:"limit"`
 }
 
 func NewAPIHandler(svc service.WorkService) *APIHandler {
@@ -202,6 +212,32 @@ func (h *APIHandler) HandleDraftCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusCreated, result)
+}
+
+func (h *APIHandler) HandleRecentEvents(w http.ResponseWriter, r *http.Request) {
+	limit := defaultListLimit
+	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, apiError{Error: "invalid limit"})
+			return
+		}
+		if parsed <= 0 || parsed > maxListLimit {
+			parsed = defaultListLimit
+		}
+		limit = parsed
+	}
+
+	events, err := h.svc.RecentEvents(r.Context(), limit)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, apiError{Error: "load recent events"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, recentEventsResponse{
+		Events: events,
+		Limit:  len(events),
+	})
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {

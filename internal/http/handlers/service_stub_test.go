@@ -9,11 +9,12 @@ import (
 )
 
 type stubService struct {
-	create  func(context.Context, packets.DraftInput) (service.WorkDetail, packets.ValidationErrors, error)
-	get     func(context.Context, string) (service.WorkDetail, error)
-	list    func(context.Context, int) ([]service.WorkSummary, error)
-	review  func(context.Context) (service.ReviewQueueData, error)
-	history func(context.Context, string) ([]service.Event, error)
+	create       func(context.Context, packets.DraftInput) (service.WorkDetail, packets.ValidationErrors, error)
+	get          func(context.Context, string) (service.WorkDetail, error)
+	list         func(context.Context, int) ([]service.WorkSummary, error)
+	review       func(context.Context) (service.ReviewQueueData, error)
+	history      func(context.Context, string) ([]service.Event, error)
+	recentEvents func(context.Context, int) ([]service.Event, error)
 }
 
 func (s stubService) CreateWork(ctx context.Context, input packets.DraftInput) (service.WorkDetail, packets.ValidationErrors, error) {
@@ -47,6 +48,13 @@ func (s stubService) ReviewQueue(ctx context.Context) (service.ReviewQueueData, 
 func (s stubService) WorkHistory(ctx context.Context, id string) ([]service.Event, error) {
 	if s.history != nil {
 		return s.history(ctx, id)
+	}
+	return nil, errors.New("not implemented")
+}
+
+func (s stubService) RecentEvents(ctx context.Context, limit int) ([]service.Event, error) {
+	if s.recentEvents != nil {
+		return s.recentEvents(ctx, limit)
 	}
 	return nil, errors.New("not implemented")
 }

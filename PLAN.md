@@ -368,6 +368,24 @@ Acceptance:
 - the JSON route stays faithful to the `backend_events` schema, including event ID, timestamps, type, work item/id, optional work version ID, and payload.
 - all handlers remain thin, delegating ordering and payload normalization to the service so no duplicate query logic creeps into the routes.
 
+### Phase 10 — system-wide recent activity ledger (0.1.9)
+
+Goal: make the `backend_events` trail operationally useful across the entire system, not just per work item, before 0.2 focuses on larger feature/landing work.
+
+Current focus:
+
+- `service.RecentEvents(ctx, limit)` provides a shared query boundary for cross-work event reads with ordering, limit enforcement, and consistent event struct mapping.
+- `GET /history` renders a compact operator-facing ledger showing recent events across all work items with human-friendly summaries.
+- `GET /api/events/recent` exposes the raw event stream for tooling, TUI, and future automation.
+
+Acceptance:
+
+- the human ledger shows newest-first ordering with a fixed default limit (25) and hard maximum (100).
+- each event shows timestamp, event type, work item ID (when present), and a one-line summary with optional detail bullets.
+- the JSON endpoint returns the full event rows including payload for machine consumption.
+- no search, pagination framework, auth, or dashboard framework was introduced.
+- existing per-work history and all existing routes remain intact.
+
 ---
 
 ## Parallel workstreams

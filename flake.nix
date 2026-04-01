@@ -11,13 +11,15 @@
   }: let
     systems = ["x86_64-linux" "aarch64-linux"];
     forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f system);
+    # Read version from VERSION file at repo root
+    version = nixpkgs.lib.trim (builtins.readFile ./VERSION);
   in {
     packages = forAllSystems (system: let
       pkgs = import nixpkgs {inherit system;};
     in {
       default = pkgs.buildGoModule {
         pname = "bountystash";
-        version = "0.1.2";
+        version = version;
         src = ./.;
 
         subPackages = ["cmd/web"];
@@ -41,7 +43,7 @@
 
       tui = pkgs.buildGoModule {
         pname = "bountystash-tui";
-        version = "0.1.2";
+        version = version;
         src = ./.;
 
         subPackages = ["cmd/bountystash-tui"];
@@ -53,7 +55,7 @@
         # 3) replace with the hash shown in the build error.
         vendorHash = "sha256-zVLALLW4ZkwYD7bJ0UOZ206fRpBJ1FnlVy/ugZI1g8k=";
         ldflags = [
-          "-X github.com/shaoyanji/bountystash/internal/version.Version=0.1.2"
+          "-X github.com/shaoyanji/bountystash/internal/version.Version=${version}"
           "-X github.com/shaoyanji/bountystash/internal/version.Commit=flake"
           "-X github.com/shaoyanji/bountystash/internal/version.Date=unknown"
         ];

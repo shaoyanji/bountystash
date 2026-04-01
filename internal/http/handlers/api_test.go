@@ -147,3 +147,105 @@ func withAPIParam(req *http.Request, key, value string) *http.Request {
 	routeCtx.URLParams.Add(key, value)
 	return req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, routeCtx))
 }
+
+func TestAPIRecentEventsReturnsEvents(t *testing.T) {
+	svc := stubService{
+		recentEvents: func(ctx context.Context, limit int) ([]service.Event, error) {
+			return []service.Event{
+				{
+					ID:         "evt-recent-1",
+					EventType:  "work_version_persisted",
+					WorkItemID: "work-1",
+					CreatedAt:  time.Date(2026, 3, 30, 12, 0, 0, 0, time.UTC),
+					Payload:    json.RawMessage(`{"version_number":1}`),
+				},
+				{
+					ID:         "evt-recent-2",
+					EventType:  "intake_received",
+					WorkItemID: "work-2",
+					CreatedAt:  time.Date(2026, 3, 30, 11, 0, 0, 0, time.UTC),
+					Payload:    json.RawMessage(`{"title":"test"}`),
+				},
+			}, nil
+		},
+	}
+	h := NewAPIHandler(svc)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/events/recent", nil)
+	rec := httptest.NewRecorder()
+
+	h.HandleRecentEvents(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	var payload recentEventsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(payload.Events) != 2 {
+		t.Fatalf("events len = %d, want 2", len(payload.Events))
+	}
+	if payload.Limit != 2 {
+		t.Fatalf("limit = %d, want 2", payload.Limit)
+	}
+}
+
+func TestAPIRecentEventsEmpty(t *testing.T) {
+	svc := stubService{
+		recentEvents: func(ctx context.Context, limit int) ([]service.Event, error) {
+			return []service.Event{}, nil
+		},
+	}
+	h := NewAPIHandler(svc)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/events/recent", nil)
+	rec := httptest.NewRecorder()
+
+	h.HandleRecentEvents(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	var payload recentEventsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(payload.Events) != 0 {
+		t.Fatalf("events len = %d, want 0", len(payload.Events))
+	}
+}
+
+func TestAPIRecentEventsWithLimit(t *testing.T) {
+	svc := stubService{
+		recentEvents: func(ctx context.Context, limit int) ([]service.Event, error) {
+			return []service.Event{}, nil
+		},
+	}
+	h := NewAPIHandler(svc)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/events/recent?limit=10", nil)
+	rec := httptest.NewRecorder()
+
+	h.HandleRecentEvents(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+}
+
+func TestAPIRecentEventsInvalidLimit(t *testing.T) {
+	svc := stubService{}
+	h := NewAPIHandler(svc)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/events/recent?limit=invalid", nil)
+	rec := httptest.NewRecorder()
+
+	h.HandleRecentEvents(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}

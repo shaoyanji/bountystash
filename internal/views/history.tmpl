@@ -1,10 +1,15 @@
 {{define "content"}}
 <section class="panel">
   <div class="hero">
+    {{if .WorkID}}
     <h1>Work history</h1>
     <p class="hint">Work item ID: {{.WorkID}}</p>
     {{if .WorkTitle}}
     <p class="hint">Title: {{.WorkTitle}}</p>
+    {{end}}
+    {{else}}
+    <h1>Recent activity</h1>
+    <p class="hint">System-wide ledger of recent backend events</p>
     {{end}}
   </div>
   {{if .Entries}}
@@ -36,7 +41,7 @@
     </tbody>
   </table>
   {{else}}
-  <p class="hint">No recorded events exist for this work item yet.</p>
+  <p class="hint">No recent events found.</p>
   {{end}}
 </section>
 {{end}}

@@ -229,6 +229,107 @@ func TestServiceWorkHistoryEmpty(t *testing.T) {
 	}
 }
 
+func TestServiceRecentEvents(t *testing.T) {
+	db, recorder := newMockDB(t)
+	defer func() {
+		_ = db.Close()
+	}()
+	recorder.ExpectQuery("SELECT id").WillReturnRows(
+		[]string{"id", "event_type", "work_item_id", "work_version_id", "payload", "created_at"},
+		[]any{
+			"evt-recent-1",
+			"work_version_persisted",
+			"work-2",
+			"version-2",
+			[]byte(`{"version_number":1}`),
+			time.Date(2026, 3, 30, 12, 0, 0, 0, time.UTC),
+		},
+		[]any{
+			"evt-recent-2",
+			"intake_received",
+			"work-1",
+			nil,
+			[]byte(`{"title":"test"}`),
+			time.Date(2026, 3, 30, 11, 0, 0, 0, time.UTC),
+		},
+	)
+
+	svc := NewService(db)
+	events, err := svc.RecentEvents(context.Background(), 10)
+	if err != nil {
+		t.Fatalf("RecentEvents error: %v", err)
+	}
+	if len(events) != 2 {
+		t.Fatalf("events len = %d, want 2", len(events))
+	}
+	if events[0].ID != "evt-recent-1" || events[1].ID != "evt-recent-2" {
+		t.Fatalf("unexpected events: %+v", events)
+	}
+
+	if err := recorder.ExpectationsWereMet(); err != nil {
+		t.Fatalf("recorder expectations: %v", err)
+	}
+}
+
+func TestServiceRecentEventsEmpty(t *testing.T) {
+	db, recorder := newMockDB(t)
+	defer func() {
+		_ = db.Close()
+	}()
+	recorder.ExpectQuery("SELECT id").WillReturnRows(
+		[]string{"id", "event_type", "work_item_id", "work_version_id", "payload", "created_at"},
+	)
+
+	svc := NewService(db)
+	events, err := svc.RecentEvents(context.Background(), 10)
+	if err != nil {
+		t.Fatalf("RecentEvents error: %v", err)
+	}
+	if len(events) != 0 {
+		t.Fatalf("expected empty events, got %d", len(events))
+	}
+
+	if err := recorder.ExpectationsWereMet(); err != nil {
+		t.Fatalf("recorder expectations: %v", err)
+	}
+}
+
+func TestServiceRecentEventsDefaultLimit(t *testing.T) {
+	db, recorder := newMockDB(t)
+	defer func() {
+		_ = db.Close()
+	}()
+	recorder.ExpectQuery("SELECT id")
+
+	svc := NewService(db)
+	_, err := svc.RecentEvents(context.Background(), 0)
+	if err != nil {
+		t.Fatalf("RecentEvents error: %v", err)
+	}
+
+	if err := recorder.ExpectationsWereMet(); err != nil {
+		t.Fatalf("recorder expectations: %v", err)
+	}
+}
+
+func TestServiceRecentEventsMaxLimit(t *testing.T) {
+	db, recorder := newMockDB(t)
+	defer func() {
+		_ = db.Close()
+	}()
+	recorder.ExpectQuery("SELECT id")
+
+	svc := NewService(db)
+	_, err := svc.RecentEvents(context.Background(), 500)
+	if err != nil {
+		t.Fatalf("RecentEvents error: %v", err)
+	}
+
+	if err := recorder.ExpectationsWereMet(); err != nil {
+		t.Fatalf("recorder expectations: %v", err)
+	}
+}
+
 func newMockDB(t *testing.T) (*sql.DB, *mockRecorder) {
 	recorder := newMockRecorder(t)
 	db, err := sql.Open(mockDriverName, recorder.name)

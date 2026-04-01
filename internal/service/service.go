@@ -26,6 +26,7 @@ type WorkService interface {
 	ListRecentWork(context.Context, int) ([]WorkSummary, error)
 	ReviewQueue(context.Context) (ReviewQueueData, error)
 	WorkHistory(context.Context, string) ([]Event, error)
+	RecentEvents(context.Context, int) ([]Event, error)
 }
 
 type Service struct {
@@ -365,6 +366,56 @@ func (s *Service) WorkHistory(ctx context.Context, workID string) ([]Event, erro
 	defer rows.Close()
 
 	out := make([]Event, 0)
+	for rows.Next() {
+		var (
+			event        Event
+			payloadBytes []byte
+			versionID    sql.NullString
+		)
+		if err := rows.Scan(
+			&event.ID,
+			&event.EventType,
+			&event.WorkItemID,
+			&versionID,
+			&payloadBytes,
+			&event.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		if versionID.Valid {
+			event.WorkVersionID = ptrString(versionID.String)
+		} else {
+			event.WorkVersionID = nil
+		}
+		if payloadBytes != nil {
+			event.Payload = append(json.RawMessage(nil), payloadBytes...)
+		}
+		out = append(out, event)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (s *Service) RecentEvents(ctx context.Context, limit int) ([]Event, error) {
+	if limit <= 0 || limit > maxListLimit {
+		limit = defaultListLimit
+	}
+
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, event_type, work_item_id, work_version_id, payload, created_at
+		FROM backend_events
+		ORDER BY created_at DESC
+		LIMIT $1
+	`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]Event, 0, limit)
 	for rows.Next() {
 		var (
 			event        Event

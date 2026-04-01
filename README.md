@@ -13,10 +13,13 @@ Current product shape:
 - Keyboard-first terminal client over HTTP (`cmd/bountystash-tui`)
 - First non-browser representation pass for human-facing routes (`html`, `md`, `text`)
 - Static manifest/discovery surface for agents and curl clients
+- System-wide recent activity ledger for operators
 
-Current release target: `0.1.8`. The 0.1.7 backend pass introduced the shared Go `service` seam and append-only `backend_events` trail (intake_received, packet_normalized, work_item_created, work_version_persisted, review_queue_read, etc.), so the relational tables now serve as projections derived from the durable event history. HTML, JSON, and TUI routes reuse that seam instead of duplicating persistence logic.
+Current release target: `0.1.9`. The 0.1.7 backend pass introduced the shared Go `service` seam and append-only `backend_events` trail (intake_received, packet_normalized, work_item_created, work_version_persisted, review_queue_read, etc.), so the relational tables now serve as projections derived from the durable event history. HTML, JSON, and TUI routes reuse that seam instead of duplicating persistence logic.
 
-Release 0.1.8 makes the append-only trail readable. `GET /work/{id}/history` renders a human-friendly, curated timeline of intake, validation, normalization, and persistence events, while `GET /api/work/{id}/history` returns the structured `backend_events` payloads for tooling. The human view intentionally highlights only operationally meaningful events so operators can scan the sequence without dumping raw JSON, keeping the event trail clearly developer/operator-facing.
+Release 0.1.8 made the append-only trail readable per work item. `GET /work/{id}/history` renders a human-friendly, curated timeline of intake, validation, normalization, and persistence events, while `GET /api/work/{id}/history` returns the structured `backend_events` payloads for tooling.
+
+Release 0.1.9 adds a system-wide recent activity ledger. `GET /history` provides a compact operator-facing view of recent events across all work items, and `GET /api/events/recent` exposes the raw event stream for tooling. This completes the backend plumbing so the event trail is operationally useful at the system level before 0.2.
 
 ## Current Milestone Scope
 
@@ -28,6 +31,7 @@ Release 0.1.8 makes the append-only trail readable. `GET /work/{id}/history` ren
 - `GET /healthz` health probe
 - `GET /.well-known/bountystash-manifest` static discovery manifest for curl/agents
 - `GET /work/{id}/history` curated human history timeline based on `backend_events`
+- `GET /history` system-wide recent activity ledger (0.1.9)
 - Human-facing route representation rules:
   - Browser-like requests keep HTML on `GET /`, `GET /work/{id}`, `GET /examples/{slug}`, and `GET /review`
   - Non-browser requests to those routes default to readable markdown
@@ -43,6 +47,7 @@ Release 0.1.8 makes the append-only trail readable. `GET /work/{id}/history` ren
   - `GET /api/work`
   - `GET /api/work/{id}`
   - `GET /api/work/{id}/history`
+  - `GET /api/events/recent` (0.1.9)
   - `POST /api/draft`
 
 ## Run Web
@@ -73,7 +78,9 @@ curl 'http://127.0.0.1:8080/?format=md'
 curl 'http://127.0.0.1:8080/?format=text'
 curl http://127.0.0.1:8080/examples/auth-loop
 curl http://127.0.0.1:8080/review
+curl http://127.0.0.1:8080/history
 curl http://127.0.0.1:8080/api/examples
+curl http://127.0.0.1:8080/api/events/recent
 ```
 
 Notes:
@@ -142,13 +149,104 @@ TUI flow notes:
 
 ## Build and Verify
 
+This repo uses a thin task runner ([Taskfile.yml](Taskfile.yml)) for coherent builds, checks, and version management.
+
+**Prerequisite:** Install [task](https://taskfile.dev) or use the raw commands below.
+
+### Quick Start
+
 ```bash
-go build ./...
-go test ./...
+# Run all checks (Go + Nix)
+task check:all
+
+# Build both binaries with version metadata
+task build:all
+
+# Show current version source
+task version:show
+```
+
+### Go Toolchain Policy
+
+All Go commands run through the Nix dev shell to avoid toolchain drift:
+
+```bash
+nix develop --command bash -c 'unset GOROOT; GOTOOLCHAIN=local go test ./...'
+nix develop --command bash -c 'unset GOROOT; GOTOOLCHAIN=local go build ./...'
+```
+
+**Do not use host Go** for repo checks. The flake provides the Go toolchain.
+
+### Version Source of Truth
+
+The `VERSION` file at repo root is the single source of truth. It feeds into:
+
+- `flake.nix` package version metadata
+- Build-time ldflags injection for Go binaries
+- Release tags (`git tag vX.Y.Z`)
+
+To update version:
+
+```bash
+# 1. Edit VERSION file
+echo "0.1.10" > VERSION
+
+# 2. Sync flake.nix
+task version:sync
+
+# 3. Verify
+task check:all
+
+# 4. Tag release
+git tag v0.1.10
+```
+
+### Standard Tasks
+
+| Task | Description |
+|------|-------------|
+| `task check:all` | Run all Go + Nix checks |
+| `task check:go` | Run Go tests and build through Nix dev shell |
+| `task check:nix` | Run Nix builds and flake check |
+| `task build:web` | Build web server binary with version metadata |
+| `task build:tui` | Build TUI binary with version metadata |
+| `task build:all` | Build both binaries |
+| `task version:show` | Show current version source |
+| `task version:sync` | Sync flake.nix to VERSION file |
+| `task dev:shell` | Enter Nix dev shell |
+
+### Manual Commands (No Task Runner)
+
+If you don't have `task` installed, use these directly:
+
+```bash
+# Go checks
+nix develop --command bash -c 'unset GOROOT; GOTOOLCHAIN=local go test ./...'
+nix develop --command bash -c 'unset GOROOT; GOTOOLCHAIN=local go build ./...'
+
+# Nix checks
 nix build .#default
 nix build .#tui
 nix flake check
+
+# Build with version
+VERSION=$(cat VERSION)
+DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+COMMIT=$(git rev-parse --short HEAD)
+nix develop --command bash -c 'unset GOROOT; GOTOOLCHAIN=local go build -ldflags "-X github.com/shaoyanji/bountystash/internal/version.Version=$VERSION -X github.com/shaoyanji/bountystash/internal/version.Commit=$COMMIT -X github.com/shaoyanji/bountystash/internal/version.Date=$DATE" -o ./bin/web ./cmd/web'
 ```
+
+### Hash Update Ritual
+
+When Go dependencies or Nix inputs change, update `vendorHash` in `flake.nix`:
+
+1. Set `vendorHash = pkgs.lib.fakeHash` for the affected package
+2. Run `nix build .#default` or `nix build .#tui`
+3. Copy the hash from the build error
+4. Replace `fakeHash` with the real hash
+5. Run `task check:nix` to verify
+
+Or use: `task hash:update:default` / `task hash:update:tui`
 
 ## Release Artifacts
 
