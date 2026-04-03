@@ -1,60 +1,147 @@
 # Bountystash
 
-Bountystash is a thin server-rendered Go app that turns messy intake into deterministic work packets, stores immutable versions in Postgres, and persists provenance hashes.
+Bountystash is a thin server-rendered Go app for turning messy technical asks into structured, reviewable work items.
 
-Current product shape:
+It keeps browser use simple, exposes readable human-facing routes for curl and agents, and provides a keyboard-first TUI over the same backend seams. The system stores immutable work versions in Postgres, preserves deterministic normalization, and keeps a provenance/event trail legible without turning the product into a dashboard or a graph platform.
 
-- Go app server
-- HTML templates (no SPA/hydration framework)
-- Postgres/Supabase relational source of truth
-- Immutable `work_versions`
-- Exact + quotient hash provenance
-- Minimal reviewer queue surface
-- Keyboard-first terminal client over HTTP (`cmd/bountystash-tui`)
-- First non-browser representation pass for human-facing routes (`html`, `md`, `text`)
-- Static manifest/discovery surface for agents and curl clients
-- System-wide recent activity ledger for operators
+## v0.2.0
 
-Current release target: `0.1.9`. The 0.1.7 backend pass introduced the shared Go `service` seam and append-only `backend_events` trail (intake_received, packet_normalized, work_item_created, work_version_persisted, review_queue_read, etc.), so the relational tables now serve as projections derived from the durable event history. HTML, JSON, and TUI routes reuse that seam instead of duplicating persistence logic.
+v0.2.0 is the first public-facing product-shape release.
 
-Release 0.1.8 made the append-only trail readable per work item. `GET /work/{id}/history` renders a human-friendly, curated timeline of intake, validation, normalization, and persistence events, while `GET /api/work/{id}/history` returns the structured `backend_events` payloads for tooling.
+It introduces:
 
-Release 0.1.9 adds a system-wide recent activity ledger. `GET /history` provides a compact operator-facing view of recent events across all work items, and `GET /api/events/recent` exposes the raw event stream for tooling. This completes the backend plumbing so the event trail is operationally useful at the system level before 0.2.
+- a landing-first homepage instead of an intake-first front door
+- clearer public navigation across core surfaces
+- featured examples on the homepage
+- recent activity preview on the homepage
+- light consistency polish across examples, review, work, and history pages
+- preserved readable non-browser routes for curl and agent use
+- preserved thin server-rendered architecture with no SPA/hydration drift
 
-## Current Milestone Scope
+## Product shape
 
-- `GET /` intake form
-- `POST /draft` normalize + validate + persist + redirect
-- `GET /work/{id}` persisted packet view
-- `GET /examples/{slug}` seeded packet examples
-- `GET /review` minimal reviewer queue (with private security separated)
-- `GET /healthz` health probe
-- `GET /.well-known/bountystash-manifest` static discovery manifest for curl/agents
-- `GET /work/{id}/history` curated human history timeline based on `backend_events`
-- `GET /history` system-wide recent activity ledger (0.1.9)
-- Human-facing route representation rules:
-  - Browser-like requests keep HTML on `GET /`, `GET /work/{id}`, `GET /examples/{slug}`, and `GET /review`
-  - Non-browser requests to those routes default to readable markdown
-  - Supported overrides on those routes: `?format=html`, `?format=md`, `?format=text`
-  - `/api/*` stays JSON regardless of `Accept` or `?format=...`
-  - `/healthz` stays plain text
-  - The manifest is a discoverability surface, not an API parity layer
-- JSON API for terminal client:
-  - `GET /api/healthz`
-  - `GET /api/examples`
-  - `GET /api/examples/{slug}`
-  - `GET /api/review`
-  - `GET /api/work`
-  - `GET /api/work/{id}`
-  - `GET /api/work/{id}/history`
-  - `GET /api/events/recent` (0.1.9)
-  - `POST /api/draft`
+Bountystash is:
 
-## Run Web
+- a Go app server
+- server-rendered HTML with minimal client-side behavior
+- backed by Postgres / Supabase
+- built around immutable `work_versions`
+- deterministic in normalization and hash generation
+- readable from browser, curl/agents, and TUI
+- intentionally thin and legible
+
+Bountystash is not:
+
+- a browser-heavy SPA
+- a graph database product
+- a workflow engine marketplace
+- an analytics dashboard
+- a realtime collaboration app
+- a marketplace / billing / escrow system
+
+## Core entry modes
+
+### Browser
+
+Use the web app to:
+
+- understand the product from the landing page
+- inspect seeded examples
+- review queued work
+- browse recent activity
+- create work items through the intake form
+- inspect persisted work and its history
+
+### Curl / agents
+
+Use human-facing routes for readable output and the manifest for discovery:
+
+- human routes default to HTML for browser-like requests
+- non-browser requests default to readable markdown on supported routes
+- `?format=html|md|text` remains meaningful on human-facing routes
+- `/.well-known/bountystash-manifest` is the discovery surface
+- `/api/*` remains the structured JSON surface
+
+### TUI
+
+Use the terminal client over HTTP for keyboard-first operation:
+
+- browse examples and persisted work
+- review queue items
+- inspect work detail
+- create drafts
+- reload backend data quickly
+
+## Main routes
+
+### Human-facing routes
+
+- `GET /` — landing page and intake
+- `POST /draft` — normalize + validate + persist + redirect
+- `GET /work/{id}` — persisted work detail
+- `GET /work/{id}/history` — curated per-work history timeline
+- `GET /examples/{slug}` — seeded example pages
+- `GET /review` — minimal reviewer queue
+- `GET /history` — system-wide recent activity ledger
+- `GET /healthz` — health probe
+- `GET /.well-known/bountystash-manifest` — discovery surface for curl/agents
+
+### JSON API routes
+
+- `GET /api/healthz`
+- `GET /api/examples`
+- `GET /api/examples/{slug}`
+- `GET /api/review`
+- `GET /api/work`
+- `GET /api/work/{id}`
+- `GET /api/work/{id}/history`
+- `GET /api/events/recent`
+- `POST /api/draft`
+
+## Representation rules
+
+Human-facing routes are readable first.
+
+- Browser-like requests keep HTML on supported human-facing routes.
+- Non-browser requests default to readable markdown on supported human-facing routes.
+- Supported overrides on human-facing routes: `?format=html`, `?format=md`, `?format=text`
+- `/api/*` stays JSON regardless of `Accept` or `?format=...`
+- `/healthz` stays plain text
+- The manifest is a discoverability surface, not an API parity layer
+
+Notes:
+
+- Human-facing routes are intended to be readable, not field-for-field mirrors of JSON responses.
+- Prefer the manifest over broad scraping.
+- Prefer `/api/*` over scraping when you need structured data.
+
+## What the system stores
+
+Bountystash turns messy asks into normalized work packets and persists:
+
+- stable `work_items`
+- immutable `work_versions`
+- exact content hashes
+- quotient hashes from an explicit projection
+- append-only `backend_events` for lineage and operational history
+
+The current event/history surfaces make that trail useful without turning the app into an audit platform.
+
+## Current example entry points
+
+Examples are currently exposed through seeded example routes such as:
+
+- `/examples/auth-loop`
+- `/examples/webhook-rfq`
+- `/examples/pipeline-rfp`
+
+There is not yet a standalone `/examples` index route. For now, the product uses seeded example entry points directly and keeps the diff surface narrow.
+
+## Run web
 
 1. Set `DATABASE_URL` to a reachable Postgres database.
 2. Apply `db/migrations/0001_init.sql`.
-3. Start the server with Go:
+3. Start the server:
 
 ```bash
 go run ./cmd/web
@@ -82,13 +169,6 @@ curl http://127.0.0.1:8080/history
 curl http://127.0.0.1:8080/api/examples
 curl http://127.0.0.1:8080/api/events/recent
 ```
-
-Notes:
-
-- Human-facing routes are readable first for non-browser clients; they are not intended to mirror every API response field.
-- `/.well-known/bountystash-manifest` is the canonical next step for agent discovery and route etiquette.
-- Reach for `/api/*` when you want structured JSON.
-- Prefer the manifest over broad scraping; prefer `/api/*` over scraping when you need structured data.
 
 ## Run TUI
 
@@ -140,13 +220,6 @@ TUI keys:
 - `?` help overlay
 - `q` quit
 
-TUI flow notes:
-
-- Browse/review lists are sectioned and include explicit empty-state messaging.
-- `Enter` opens a focused inspect mode that shows normalized packet fields, hashes, and status metadata when available.
-- Create success opens inspect mode for the newly created work item and surfaces the new work item ID in the footer.
-- Validation, API, timeout/unavailable, and invalid-response errors are surfaced with distinct messages in the footer.
-
 ## Build and Verify
 
 This repo uses a thin task runner ([Taskfile.yml](Taskfile.yml)) for coherent builds, checks, and version management.
@@ -189,7 +262,7 @@ To update version:
 
 ```bash
 # 1. Edit VERSION file
-echo "0.1.10" > VERSION
+echo "0.2.0" > VERSION
 
 # 2. Sync flake.nix
 task version:sync
@@ -198,7 +271,7 @@ task version:sync
 task check:all
 
 # 4. Tag release
-git tag v0.1.10
+git tag v0.2.0
 ```
 
 ### Standard Tasks
@@ -257,42 +330,9 @@ Tagged releases (`v*`) run `.github/workflows/release.yml` and publish:
 Example:
 
 ```bash
-git tag v0.1.2
-git push origin v0.1.2
+git tag v0.2.0
+git push origin v0.2.0
 ```
-
-## Nix Hash Update Ritual
-
-If Go dependencies, vendoring, or package inputs change, refresh `vendorHash` values in `flake.nix` before relying on CI/deploy.
-
-For `.#default`:
-
-1. Set `packages.<system>.default.vendorHash = pkgs.lib.fakeHash;`
-2. Run `nix build .#default`
-3. Copy the hash from the build error into `vendorHash`
-
-For `.#tui`:
-
-1. Set `packages.<system>.tui.vendorHash = pkgs.lib.fakeHash;`
-2. Run `nix build .#tui`
-3. Copy the hash from the build error into `vendorHash`
-
-Then run the full verification set:
-
-```bash
-go test ./...
-go build ./...
-nix build .#default
-nix build .#tui
-nix flake check
-```
-
-Release/deploy checklist:
-
-1. Update hashes if needed using the ritual above.
-2. Run the full verification set locally.
-3. Open/merge PR with passing CI.
-4. Tag release (`vX.Y.Z`) to publish TUI artifact(s).
 
 ## Determinism and Safety Notes
 
@@ -301,7 +341,7 @@ Release/deploy checklist:
 - Quotient hash is computed from an explicit projection (`kind`, `scope`, `deliverables`, `acceptance_criteria`, `reward_model`, `visibility`).
 - `private_security` intake always persists with `private` visibility.
 
-## Non-goals (for this milestone)
+## Non-goals
 
 - SPA/client framework architecture
 - Secondary primary datastores
