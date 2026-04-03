@@ -16,6 +16,7 @@ type historyEntry struct {
 	DisplayType string
 	Summary     string
 	Details     []string
+	WorkItemID  string
 }
 
 type historyPageData struct {
@@ -77,6 +78,7 @@ func summarizeHistoryEvent(evt service.Event) (historyEntry, bool) {
 	entry.Timestamp = evt.CreatedAt
 	entry.EventType = evt.EventType
 	entry.DisplayType = humanReadableEventType(evt.EventType)
+	entry.WorkItemID = evt.WorkItemID
 
 	switch evt.EventType {
 	case "intake_received":
@@ -185,6 +187,7 @@ func summarizeSystemHistoryEvent(evt service.Event) (historyEntry, bool) {
 	entry.Timestamp = evt.CreatedAt
 	entry.EventType = evt.EventType
 	entry.DisplayType = humanReadableEventType(evt.EventType)
+	entry.WorkItemID = evt.WorkItemID
 
 	switch evt.EventType {
 	case "intake_received":

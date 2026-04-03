@@ -47,8 +47,11 @@ type WorkListRow struct {
 }
 
 type homeData struct {
-	Input  packets.DraftInput
-	Errors map[string]string
+	Input            packets.DraftInput
+	Errors           map[string]string
+	FeaturedExamples []Example
+	RecentEntries    []historyEntry
+	RecentError      string
 }
 
 type systemHistoryPageData struct {
@@ -90,15 +93,29 @@ func (h *DraftHandler) HandleHome(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.renderHome(w, homeData{}, http.StatusOK)
+	h.renderHome(w, r, homeData{}, http.StatusOK)
 }
 
-func (h *DraftHandler) renderHome(w http.ResponseWriter, data homeData, status int) {
+func (h *DraftHandler) renderHome(w http.ResponseWriter, r *http.Request, data homeData, status int) {
+	data = h.withHomeContext(r.Context(), data)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
 	if err := h.homeTemplate.ExecuteTemplate(w, "layout", data); err != nil {
 		http.Error(w, "template render error", http.StatusInternalServerError)
 	}
+}
+
+func (h *DraftHandler) withHomeContext(ctx context.Context, data homeData) homeData {
+	data.FeaturedExamples = SeededExamples()
+
+	events, err := h.svc.RecentEvents(ctx, 6)
+	if err != nil {
+		data.RecentError = "Recent activity is temporarily unavailable."
+		return data
+	}
+
+	data.RecentEntries = summarizeSystemHistoryEvents(events)
+	return data
 }
 
 func (h *DraftHandler) HandleDraftPost(w http.ResponseWriter, r *http.Request) {
@@ -128,7 +145,7 @@ func (h *DraftHandler) HandleDraftPost(w http.ResponseWriter, r *http.Request) {
 			writeHumanDocument(w, http.StatusBadRequest, det.Representation, validationErrorsDocument(r.URL.Path, http.StatusBadRequest, validationErrors))
 			return
 		}
-		h.renderHome(w, homeData{
+		h.renderHome(w, r, homeData{
 			Input:  input,
 			Errors: validationErrors,
 		}, http.StatusBadRequest)

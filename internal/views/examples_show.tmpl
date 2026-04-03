@@ -2,8 +2,13 @@
 
 {{define "content"}}
 <section class="hero panel">
+  <span class="kicker">Seeded example</span>
   <h1>{{.Packet.Title}}</h1>
-  <p>Seeded example packet <code>{{.Slug}}</code> for deterministic shape and UI preview.</p>
+  <p>Reference packet <code>{{.Slug}}</code> showing how intake becomes structured work with review-ready fields.</p>
+  <div class="cta-row">
+    <a class="text-link" href="/">Back to home</a>
+    <a class="text-link" href="/api/examples/{{.Slug}}">View JSON</a>
+  </div>
 </section>
 
 <section class="panel">

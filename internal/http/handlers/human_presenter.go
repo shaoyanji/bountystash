@@ -165,24 +165,25 @@ func landingDocument() humanDocument {
 	}
 
 	usefulRoutes := []string{
-		"/ - landing page and browser intake form",
+		"/ - landing page with featured examples, recent activity preview, and intake form",
 		"/review - reviewer queue with private security separated",
+		"/history - system-wide recent event ledger",
 		"/work/{id} - persisted work detail when you already have a work item ID",
 	}
 	usefulRoutes = append(usefulRoutes, exampleRoutes...)
 
 	return humanDocument{
 		Title:   "Bountystash",
-		Summary: "Thin server-rendered intake app for turning messy technical asks into deterministic, immutable work packets with persisted provenance hashes.",
+		Summary: "Turn messy technical asks into structured, reviewable work items across browser, terminal, and agent-friendly surfaces.",
 		Sections: []humanSection{
 			{
 				Heading: "Current capabilities",
 				Lists: []humanList{
 					{
 						Items: []string{
-							"Normalize intake into stable packet fields for bounty, rfq, rfp, and private_security work.",
-							"Persist immutable work versions with exact and quotient hashes.",
-							"Expose a minimal review queue and additive JSON API routes.",
+							"Capture intake and normalize into stable packet fields for bounty, rfq, rfp, and private_security work.",
+							"Persist immutable work versions with exact and quotient hashes plus append-only backend events.",
+							"Expose reviewer queue and history views, with additive JSON API routes for tooling.",
 						},
 					},
 				},
@@ -206,6 +207,7 @@ func landingDocument() humanDocument {
 							"/api/review - review queue as JSON",
 							"/api/work - recent work items as JSON",
 							"/api/work/{id} - one persisted work item as JSON",
+							"/api/events/recent - recent backend events as JSON",
 							"/api/draft - create a draft from JSON",
 						},
 					},
@@ -254,6 +256,7 @@ func manifestDocument() humanDocument {
 							"/examples/{slug}",
 							"/work/{id}",
 							"/review",
+							"/history",
 						},
 					},
 				},
@@ -267,6 +270,7 @@ func manifestDocument() humanDocument {
 							"/api/examples/{slug}",
 							"/api/review",
 							"/api/work/{id}",
+							"/api/events/recent",
 							"/api/healthz",
 							"/api/draft",
 						},
