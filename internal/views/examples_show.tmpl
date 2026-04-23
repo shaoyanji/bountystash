@@ -2,22 +2,39 @@
 
 {{define "content"}}
 <section class="hero panel">
-  <span class="kicker">Seeded example</span>
+  <div class="cta-row" style="margin-bottom:0.75rem;">
+    <span class="kicker">Seeded example</span>
+    <span class="kind-badge {{.Packet.Kind}}">{{.Packet.Kind}}</span>
+    <span class="kind-badge {{.Packet.Visibility}}">{{.Packet.Visibility}}</span>
+  </div>
   <h1>{{.Packet.Title}}</h1>
-  <p>Reference packet <code>{{.Slug}}</code> showing how intake becomes structured work with review-ready fields.</p>
+  <div class="hash" style="margin-top:0.5rem;">{{.Slug}}</div>
+  <p style="margin-top:0.75rem;">Reference packet showing how intake becomes structured work with review-ready fields.</p>
   <div class="cta-row">
-    <a class="text-link" href="/">Back to home</a>
-    <a class="text-link" href="/api/examples/{{.Slug}}">View JSON</a>
+    <a class="action" href="/">← Back to home</a>
+    <a class="action" href="/api/examples/{{.Slug}}">View JSON →</a>
   </div>
 </section>
 
-<section class="panel">
-  <h2>Example Metadata</h2>
+<section class="panel panel-compact">
+  <div class="section-header" style="margin-top:0;">Metadata</div>
   <div class="meta-grid">
-    <div class="meta-cell"><strong>Slug</strong>{{.Slug}}</div>
-    <div class="meta-cell"><strong>Kind</strong>{{.Packet.Kind}}</div>
-    <div class="meta-cell"><strong>Visibility</strong>{{.Packet.Visibility}}</div>
-    <div class="meta-cell"><strong>Reward Model</strong>{{if .Packet.RewardModel}}{{.Packet.RewardModel}}{{else}}Not specified{{end}}</div>
+    <div class="meta-cell">
+      <strong>Slug</strong>
+      <span class="mono">{{.Slug}}</span>
+    </div>
+    <div class="meta-cell">
+      <strong>Kind</strong>
+      {{.Packet.Kind}}
+    </div>
+    <div class="meta-cell">
+      <strong>Visibility</strong>
+      {{.Packet.Visibility}}
+    </div>
+    <div class="meta-cell">
+      <strong>Reward Model</strong>
+      {{if .Packet.RewardModel}}{{.Packet.RewardModel}}{{else}}Not specified{{end}}
+    </div>
   </div>
 </section>
 

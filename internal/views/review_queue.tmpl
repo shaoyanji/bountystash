@@ -1,68 +1,84 @@
 {{define "title"}}Review Queue | Bountystash{{end}}
 
 {{define "content"}}
-<section class="hero panel">
-  <span class="kicker">Review surface</span>
-  <h1>Review Queue</h1>
-  <p>Reviewer-facing queue for persisted work items in <code>open</code> or <code>review</code> status, with private security work split out by default.</p>
-</section>
-
 <section class="panel">
-  <h2>Standard Queue</h2>
-  {{if .Standard}}
-  <table class="queue">
-    <thead>
-      <tr>
-        <th>Title</th>
-        <th>Kind</th>
-        <th>Visibility</th>
-        <th>Status</th>
-        <th>Created</th>
-      </tr>
-    </thead>
-    <tbody>
-      {{range .Standard}}
-      <tr>
-        <td class="queue-title"><a href="/work/{{.ID}}">{{.Title}}</a></td>
-        <td>{{.Kind}}</td>
-        <td>{{.Visibility}}</td>
-        <td>{{.Status}}</td>
-        <td>{{.CreatedAt.Format "2006-01-02 15:04:05 MST"}}</td>
-      </tr>
-      {{end}}
-    </tbody>
-  </table>
-  {{else}}
-  <p>No standard queue items.</p>
-  {{end}}
-</section>
+  <div class="hero" style="margin-bottom:0.5rem;">
+    <span class="kicker">Review surface</span>
+    <h1>Review Queue</h1>
+    <p>Reviewer-facing queue for persisted work items in open or review status. Private security items are flagged.</p>
+  </div>
 
-<section class="panel">
-  <h2>Private Security Queue</h2>
-  <p class="hint">Private security items are separated from public-facing flow.</p>
-  {{if .Private}}
-  <table class="queue">
-    <thead>
-      <tr>
-        <th>Title</th>
-        <th>Visibility</th>
-        <th>Status</th>
-        <th>Created</th>
-      </tr>
-    </thead>
-    <tbody>
-      {{range .Private}}
-      <tr>
-        <td class="queue-title"><a href="/work/{{.ID}}">{{.Title}}</a></td>
-        <td>{{.Visibility}}</td>
-        <td>{{.Status}}</td>
-        <td>{{.CreatedAt.Format "2006-01-02 15:04:05 MST"}}</td>
-      </tr>
-      {{end}}
-    </tbody>
-  </table>
-  {{else}}
-  <p>No private security queue items.</p>
-  {{end}}
+  <div class="tab-bar" role="tablist" aria-label="Review queues">
+    <button class="tab active" role="tab" aria-selected="true" id="tab-standard" aria-controls="panel-standard">Standard</button>
+    <button class="tab" role="tab" aria-selected="false" id="tab-private" aria-controls="panel-private">Private Security</button>
+  </div>
+
+  <div id="panel-standard" role="tabpanel" aria-labelledby="tab-standard">
+    {{if .Standard}}
+    <div style="overflow-x:auto;">
+      <table class="queue">
+        <thead>
+          <tr>
+            <th>Hash</th>
+            <th>Date</th>
+            <th>Title</th>
+            <th>Kind</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .Standard}}
+          <tr>
+            <td class="hash">{{.ID}}</td>
+            <td class="mono">{{.CreatedAt.Format "2006-01-02"}}</td>
+            <td><a href="/work/{{.ID}}" class="action" style="font-weight:600;">{{.Title}}</a></td>
+            <td><span class="kind-badge {{.Kind}}">{{.Kind}}</span></td>
+            <td><span class="status-badge status-{{.Status}}"><span class="status-dot" aria-hidden="true"></span>{{.Status}}</span></td>
+            <td><a href="/work/{{.ID}}" class="action">review →</a></td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+    {{else}}
+    <div class="empty-state">
+      <p>Queue clear.</p>
+    </div>
+    {{end}}
+  </div>
+
+  <div id="panel-private" role="tabpanel" aria-labelledby="tab-private" style="margin-top:1.5rem;">
+    {{if .Private}}
+    <div style="overflow-x:auto;">
+      <table class="queue">
+        <thead>
+          <tr>
+            <th>Hash</th>
+            <th>Date</th>
+            <th>Title</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .Private}}
+          <tr class="private">
+            <td class="hash">{{.ID}}</td>
+            <td class="mono">{{.CreatedAt.Format "2006-01-02"}}</td>
+            <td><a href="/work/{{.ID}}" class="action" style="font-weight:600;">{{.Title}}</a></td>
+            <td><span class="status-badge status-{{.Status}}"><span class="status-dot" aria-hidden="true"></span>{{.Status}}</span></td>
+            <td><a href="/work/{{.ID}}" class="action">review →</a></td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+    {{else}}
+    <div class="empty-state">
+      <p>Queue clear.</p>
+    </div>
+    {{end}}
+  </div>
 </section>
 {{end}}

@@ -1,34 +1,56 @@
-{{define "title"}}Work {{.ID}} | Bountystash{{end}}
+{{define "title"}}{{.Packet.Title}} | Bountystash{{end}}
 
 {{define "content"}}
 <section class="hero panel">
-  <span class="kicker">Work detail</span>
+  <div class="cta-row" style="margin-bottom:0.75rem;">
+    <span class="kicker">Work item</span>
+    <span class="kind-badge {{.Packet.Kind}}">{{.Packet.Kind}}</span>
+    <span class="kind-badge {{.Packet.Visibility}}">{{.Packet.Visibility}}</span>
+    <span class="status-badge status-{{.Status}}"><span class="status-dot" aria-hidden="true"></span>{{.Status}}</span>
+  </div>
   <h1>{{.Packet.Title}}</h1>
-  <p>Persisted immutable work packet with stable metadata and provenance hashes for traceable review.</p>
+  <div class="hash" style="margin-top:0.5rem;">{{.ID}}</div>
+  <p style="margin-top:0.75rem;">Persisted immutable work packet with stable metadata and provenance hashes for traceable review.</p>
   <div class="cta-row">
-    <a class="text-link" href="/work/{{.ID}}/history">View work history</a>
+    <a class="action" href="/work/{{.ID}}/history">View work history →</a>
   </div>
 </section>
 
-<section class="panel">
-  <h2>Packet Metadata</h2>
+<section class="panel panel-compact">
+  <div class="section-header" style="margin-top:0;">Metadata</div>
   <div class="meta-grid">
-    <div class="meta-cell"><strong>Work ID</strong>{{.ID}}</div>
-    <div class="meta-cell"><strong>Status</strong>{{.Status}}</div>
-    <div class="meta-cell"><strong>Kind</strong>{{.Packet.Kind}}</div>
-    <div class="meta-cell"><strong>Visibility</strong>{{.Packet.Visibility}}</div>
-    <div class="meta-cell"><strong>Version</strong>{{.Version}}</div>
-    <div class="meta-cell"><strong>Created</strong>{{.CreatedAt.Format "2006-01-02 15:04:05 MST"}}</div>
+    <div class="meta-cell">
+      <strong>Work ID</strong>
+      <span class="mono">{{.ID}}</span>
+    </div>
+    <div class="meta-cell">
+      <strong>Status</strong>
+      <span class="status-badge status-{{.Status}}"><span class="status-dot" aria-hidden="true"></span>{{.Status}}</span>
+    </div>
+    <div class="meta-cell">
+      <strong>Version</strong>
+      {{.Version}}
+    </div>
+    <div class="meta-cell">
+      <strong>Created</strong>
+      <span class="mono">{{.CreatedAt.Format "2006-01-02 15:04 MST"}}</span>
+    </div>
   </div>
 </section>
 
-<section class="panel">
-  <h2>Provenance</h2>
-  <div class="meta-grid">
-    <div class="meta-cell"><strong>Exact Hash</strong><code>{{.ExactHash}}</code></div>
-    <div class="meta-cell"><strong>Quotient Hash</strong><code>{{.QuotientHash}}</code></div>
+<details class="panel panel-compact">
+  <summary style="cursor:pointer; font-weight:600; color:var(--text-muted); font-size:0.9375rem;">Provenance hashes</summary>
+  <div class="meta-grid" style="margin-top:0.75rem;">
+    <div class="meta-cell">
+      <strong>Exact Hash</strong>
+      <code>{{.ExactHash}}</code>
+    </div>
+    <div class="meta-cell">
+      <strong>Quotient Hash</strong>
+      <code>{{.QuotientHash}}</code>
+    </div>
   </div>
-</section>
+</details>
 
 {{template "work_packet_sections" .Packet}}
 {{end}}

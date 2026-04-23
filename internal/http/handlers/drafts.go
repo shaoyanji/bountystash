@@ -37,6 +37,11 @@ type DraftCreateResult struct {
 
 type WorkDetail = service.WorkDetail
 
+type workShowData struct {
+	NavActive string
+	WorkDetail
+}
+
 type WorkListRow struct {
 	ID         string             `json:"id"`
 	Title      string             `json:"title"`
@@ -47,6 +52,7 @@ type WorkListRow struct {
 }
 
 type homeData struct {
+	NavActive        string
 	Input            packets.DraftInput
 	Errors           map[string]string
 	FeaturedExamples []Example
@@ -55,7 +61,8 @@ type homeData struct {
 }
 
 type systemHistoryPageData struct {
-	Entries []historyEntry
+	NavActive string
+	Entries   []historyEntry
 }
 
 func NewDraftHandler(svc service.WorkService) (*DraftHandler, error) {
@@ -97,6 +104,7 @@ func (h *DraftHandler) HandleHome(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *DraftHandler) renderHome(w http.ResponseWriter, r *http.Request, data homeData, status int) {
+	data.NavActive = "home"
 	data = h.withHomeContext(r.Context(), data)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
@@ -199,7 +207,10 @@ func (h *DraftHandler) HandleWorkShow(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := h.workShowTemplate.ExecuteTemplate(w, "layout", data); err != nil {
+	if err := h.workShowTemplate.ExecuteTemplate(w, "layout", workShowData{
+		NavActive:  "work",
+		WorkDetail: data,
+	}); err != nil {
 		http.Error(w, "template render error", http.StatusInternalServerError)
 	}
 }
@@ -253,6 +264,7 @@ func (h *DraftHandler) HandleWorkHistory(w http.ResponseWriter, r *http.Request)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := h.historyTemplate.ExecuteTemplate(w, "layout", historyPageData{
+		NavActive: "history",
 		WorkID:    work.ID,
 		WorkTitle: work.Packet.Title,
 		Entries:   historyEntries,
@@ -300,7 +312,8 @@ func (h *DraftHandler) HandleSystemHistory(w http.ResponseWriter, r *http.Reques
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := h.historyTemplate.ExecuteTemplate(w, "layout", systemHistoryPageData{
-		Entries: entries,
+		NavActive: "history",
+		Entries:   entries,
 	}); err != nil {
 		http.Error(w, "template render error", http.StatusInternalServerError)
 	}

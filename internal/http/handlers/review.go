@@ -29,8 +29,9 @@ type ReviewRow struct {
 }
 
 type ReviewQueueData struct {
-	Standard []ReviewRow `json:"standard"`
-	Private  []ReviewRow `json:"private"`
+	NavActive string
+	Standard  []ReviewRow `json:"standard"`
+	Private   []ReviewRow `json:"private"`
 }
 
 func NewReviewHandler(svc service.WorkService) (*ReviewHandler, error) {
@@ -68,6 +69,7 @@ func (h *ReviewHandler) HandleQueue(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	data.NavActive = "review"
 	if err := h.reviewTmpl.ExecuteTemplate(w, "layout", data); err != nil {
 		http.Error(w, "template render error", http.StatusInternalServerError)
 	}

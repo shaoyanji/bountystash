@@ -20,6 +20,7 @@ type historyEntry struct {
 }
 
 type historyPageData struct {
+	NavActive string
 	WorkID    string
 	WorkTitle string
 	Entries   []historyEntry

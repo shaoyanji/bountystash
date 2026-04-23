@@ -2,49 +2,44 @@
 
 {{define "content"}}
 <section class="panel">
-  <div class="hero">
+  <div class="hero" style="margin-bottom:0.5rem;">
     <span class="kicker">Event ledger</span>
     {{if .WorkID}}
     <h1>Work history</h1>
-    <p class="hint">Work item ID: {{.WorkID}}</p>
-    {{if .WorkTitle}}
-    <p class="hint">Title: {{.WorkTitle}}</p>
-    {{end}}
+    <p style="color:var(--text-secondary); margin:0;">
+      <span class="mono">{{.WorkID}}</span>
+      {{if .WorkTitle}}· {{.WorkTitle}}{{end}}
+    </p>
     {{else}}
     <h1>Recent activity</h1>
-    <p class="hint">System-wide ledger of recent backend events</p>
+    <p style="color:var(--text-secondary); margin:0;">System-wide ledger of recent backend events</p>
     {{end}}
   </div>
-  {{if .Entries}}
-  <table class="queue">
-    <thead>
-      <tr>
-        <th>Timestamp</th>
-        <th>Event</th>
-        <th>Details</th>
-      </tr>
-    </thead>
-    <tbody>
-      {{range .Entries}}
-      <tr>
-        <td>{{.Timestamp.Format "2006-01-02 15:04 MST"}}</td>
-        <td>{{.DisplayType}}</td>
-        <td>
-          <strong>{{if .Summary}}{{.Summary}}{{else}}—{{end}}</strong>
-          {{if .Details}}
-          <ul>
-            {{range .Details}}
-            <li>{{.}}</li>
-            {{end}}
-          </ul>
-          {{end}}
-        </td>
-      </tr>
-      {{end}}
-    </tbody>
-  </table>
-  {{else}}
-  <p class="hint">No recent events found.</p>
-  {{end}}
 </section>
+
+{{if .Entries}}
+<div class="grid">
+  {{range .Entries}}
+  <article class="packet">
+    <div class="hash">{{.DisplayType}}</div>
+    <div class="date">{{.Timestamp.Format "2006-01-02 15:04 MST"}}</div>
+    <h3>{{if .Summary}}{{.Summary}}{{else}}{{.DisplayType}}{{end}}</h3>
+    {{if .Details}}
+    <ul style="margin:0 0 0.75rem; padding-left:1.25rem; color:var(--text-secondary); font-size:0.875rem;">
+      {{range .Details}}<li>{{.}}</li>{{end}}
+    </ul>
+    {{end}}
+    {{if .WorkItemID}}
+    <p style="margin:0; font-size:0.875rem;">
+      Work: <a href="/work/{{.WorkItemID}}" class="action mono">{{.WorkItemID}}</a>
+    </p>
+    {{end}}
+  </article>
+  {{end}}
+</div>
+{{else}}
+<section class="panel empty-state">
+  <p>No history yet.</p>
+</section>
+{{end}}
 {{end}}

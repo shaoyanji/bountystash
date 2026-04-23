@@ -8,6 +8,7 @@ import (
 
 	"github.com/shaoyanji/bountystash/internal/http/handlers"
 	"github.com/shaoyanji/bountystash/internal/service"
+	"github.com/shaoyanji/bountystash/internal/static"
 )
 
 // NewRouter wires the thin 0.1 HTTP surface.
@@ -47,6 +48,11 @@ func NewRouter(cfg Config) (http.Handler, error) {
 	r.Get("/work/{id}/history", draftHandler.HandleWorkHistory)
 	r.Get("/examples/{slug}", handlers.HandleExampleShow)
 	r.Get("/review", reviewHandler.HandleQueue)
+
+	r.Get("/static/*", func(w http.ResponseWriter, r *http.Request) {
+		fs := http.FS(static.FS)
+		http.StripPrefix("/static/", http.FileServer(fs)).ServeHTTP(w, r)
+	})
 
 	r.Route("/api", func(api chi.Router) {
 		api.Get("/healthz", apiHandler.HandleHealthz)

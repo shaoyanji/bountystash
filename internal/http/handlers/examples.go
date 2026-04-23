@@ -15,8 +15,9 @@ import (
 var exampleShowTemplate = template.Must(views.Parse("examples_show.tmpl", "work_packet.tmpl"))
 
 type exampleShowData struct {
-	Slug   string
-	Packet packets.NormalizedPacket
+	NavActive string
+	Slug      string
+	Packet    packets.NormalizedPacket
 }
 
 type Example struct {
@@ -39,8 +40,9 @@ func HandleExampleShow(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := exampleShowData{
-		Slug:   slug,
-		Packet: example,
+		NavActive: "examples",
+		Slug:      slug,
+		Packet:    example,
 	}
 	if det.Representation != represent.RepresentationHTML {
 		writeHumanDocument(w, http.StatusOK, det.Representation, exampleDocument(Example{

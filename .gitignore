@@ -1,2 +1,5 @@
 result
 Taskfile.yml
+web
+render-test.go
+*.html
