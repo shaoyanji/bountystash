@@ -14,6 +14,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/shaoyanji/bountystash/internal/http/represent"
+	"github.com/shaoyanji/bountystash/internal/middleware"
 	"github.com/shaoyanji/bountystash/internal/packets"
 	"github.com/shaoyanji/bountystash/internal/service"
 	"github.com/shaoyanji/bountystash/internal/views"
@@ -347,6 +348,85 @@ func (h *DraftHandler) FetchCurrentPacket(ctx context.Context, workID string) (W
 		return WorkDetail{}, errors.New("service is not initialized")
 	}
 	return h.svc.GetWork(ctx, workID)
+}
+
+// HandleWorkVersionCreate creates a new version of an existing work item.
+func (h *DraftHandler) HandleWorkVersionCreate(w http.ResponseWriter, r *http.Request) {
+	det := humanRouteRepresentation(r)
+	id := strings.TrimSpace(chi.URLParam(r, "id"))
+	if !isUUID(id) {
+		if det.Representation == represent.RepresentationHTML {
+			http.NotFound(w, r)
+			return
+		}
+		writeJSON(w, http.StatusNotFound, apiError{Error: "work item not found"})
+		return
+	}
+
+	// Check authorization - only allow authenticated users to create versions
+	user := middleware.GetUser(r)
+	if user == nil {
+		if det.Representation == represent.RepresentationHTML {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		writeJSON(w, http.StatusUnauthorized, apiError{Error: "authentication required"})
+		return
+	}
+
+	if err := r.ParseForm(); err != nil {
+		if det.Representation == represent.RepresentationHTML {
+			http.Error(w, "parse form", http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, http.StatusBadRequest, apiError{Error: "parse form"})
+		return
+	}
+
+	input := packets.DraftInput{
+		Title:              r.FormValue("title"),
+		Kind:               r.FormValue("kind"),
+		Scope:              r.FormValue("scope"),
+		Deliverables:       r.FormValue("deliverables"),
+		AcceptanceCriteria: r.FormValue("acceptance_criteria"),
+		RewardModel:        r.FormValue("reward_model"),
+		Visibility:         r.FormValue("visibility"),
+	}
+
+	result, validationErrors, err := h.svc.CreateWorkVersion(r.Context(), id, input)
+	if !validationErrors.Empty() {
+		if det.Representation != represent.RepresentationHTML {
+			writeJSON(w, http.StatusBadRequest, apiError{
+				Error:            "validation failed",
+				ValidationErrors: validationErrors,
+			})
+			return
+		}
+		http.Redirect(w, r, "/work/"+id, http.StatusSeeOther)
+		return
+	}
+	if err != nil {
+		if det.Representation == represent.RepresentationHTML {
+			http.Error(w, "failed to create version", http.StatusInternalServerError)
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, apiError{Error: "failed to create version"})
+		return
+	}
+
+	if det.Representation == represent.RepresentationHTML {
+		http.Redirect(w, r, "/work/"+result.ID+"/history", http.StatusSeeOther)
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, DraftCreateResult{
+		ID:           result.ID,
+		Status:       result.Status,
+		Version:      result.Version,
+		ExactHash:    result.ExactHash,
+		QuotientHash: result.QuotientHash,
+		Packet:       result.Packet,
+	})
 }
 
 func (h *DraftHandler) FetchRecentWork(ctx context.Context, limit int) ([]WorkListRow, error) {

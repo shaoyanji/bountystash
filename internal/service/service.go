@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/shaoyanji/bountystash/internal/events"
 	"github.com/shaoyanji/bountystash/internal/packets"
 )
 
@@ -27,14 +28,17 @@ type WorkService interface {
 	ReviewQueue(context.Context) (ReviewQueueData, error)
 	WorkHistory(context.Context, string) ([]Event, error)
 	RecentEvents(context.Context, int) ([]Event, error)
+	CreateWorkVersion(context.Context, string, packets.DraftInput) (WorkDetail, packets.ValidationErrors, error)
+	SearchWork(context.Context, string, int) ([]WorkSummary, error)
 }
 
 type Service struct {
-	db *sql.DB
+	db         *sql.DB
+	dispatcher *events.Dispatcher
 }
 
-func NewService(db *sql.DB) *Service {
-	return &Service{db: db}
+func NewService(db *sql.DB, dispatcher *events.Dispatcher) *Service {
+	return &Service{db: db, dispatcher: dispatcher}
 }
 
 type WorkDetail struct {
@@ -191,6 +195,22 @@ func (s *Service) CreateWork(ctx context.Context, input packets.DraftInput) (Wor
 
 	if err := tx.Commit(); err != nil {
 		return WorkDetail{}, packets.ValidationErrors{}, err
+	}
+
+	// Dispatch webhook event asynchronously
+	if s.dispatcher != nil {
+		s.dispatcher.Enqueue(events.Event{
+			Type: "work_item_created",
+			Payload: map[string]interface{}{
+				"id":           workID,
+				"kind":         normalized.Kind,
+				"visibility":   normalized.Visibility,
+				"title":        normalized.Title,
+				"version":      1,
+				"exact_hash":   exactHash,
+				"quotient_hash": quotientHash,
+			},
+		})
 	}
 
 	return WorkDetail{
@@ -529,4 +549,166 @@ func newUUID() (string, error) {
 
 func ptrString(v string) *string {
 	return &v
+}
+
+// CreateWorkVersion creates a new immutable version of an existing work item.
+func (s *Service) CreateWorkVersion(ctx context.Context, workID string, input packets.DraftInput) (WorkDetail, packets.ValidationErrors, error) {
+	// First, fetch the existing work item to verify it exists
+	existing, err := s.GetWork(ctx, workID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return WorkDetail{}, packets.ValidationErrors{}, sql.ErrNoRows
+		}
+		return WorkDetail{}, packets.ValidationErrors{}, err
+	}
+
+	// Validate and normalize the new input
+	validation := packets.ValidateDraftInput(input)
+	if !validation.Empty() {
+		return WorkDetail{}, validation, nil
+	}
+
+	normalized := packets.NormalizeDraft(input)
+
+	packetBytes, err := canonicalJSON(normalized)
+	if err != nil {
+		return WorkDetail{}, packets.ValidationErrors{}, err
+	}
+	exactHash := sha256Hex(packetBytes)
+	quotientBytes, err := quotientProjectionJSON(normalized)
+	if err != nil {
+		return WorkDetail{}, packets.ValidationErrors{}, err
+	}
+	quotientHash := sha256Hex(quotientBytes)
+	packetJSON := string(packetBytes)
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return WorkDetail{}, packets.ValidationErrors{}, err
+	}
+	defer tx.Rollback()
+
+	versionID, err := newUUID()
+	if err != nil {
+		return WorkDetail{}, packets.ValidationErrors{}, err
+	}
+
+	// Get the next version number
+	var newVersionNumber int
+	err = tx.QueryRowContext(ctx, `
+		SELECT COALESCE(MAX(version_number), 0) + 1
+		FROM work_versions
+		WHERE work_item_id = $1
+	`, workID).Scan(&newVersionNumber)
+	if err != nil {
+		return WorkDetail{}, packets.ValidationErrors{}, err
+	}
+
+	// Insert the new version
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO work_versions (
+			id,
+			work_item_id,
+			version_number,
+			packet,
+			exact_hash,
+			quotient_hash
+		)
+		VALUES ($1, $2, $3, $4::jsonb, $5, $6)
+	`, versionID, workID, newVersionNumber, packetJSON, exactHash, quotientHash); err != nil {
+		return WorkDetail{}, packets.ValidationErrors{}, err
+	}
+
+	// Update the current_version_id on the work item
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE work_items
+		SET current_version_id = $1, updated_at = NOW()
+		WHERE id = $2
+	`, versionID, workID); err != nil {
+		return WorkDetail{}, packets.ValidationErrors{}, err
+	}
+
+	// Record the work_version_persisted event
+	if err := s.recordEvent(ctx, tx, eventWorkVersionPersisted, ptrString(workID), ptrString(versionID), map[string]any{
+		"version_number": newVersionNumber,
+		"exact_hash":     exactHash,
+		"quotient_hash":  quotientHash,
+		"source":         eventSource,
+	}); err != nil {
+		return WorkDetail{}, packets.ValidationErrors{}, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return WorkDetail{}, packets.ValidationErrors{}, err
+	}
+
+	// Dispatch webhook event asynchronously
+	if s.dispatcher != nil {
+		s.dispatcher.Enqueue(events.Event{
+			Type: "work_version_created",
+			Payload: map[string]interface{}{
+				"id":            workID,
+				"version_id":    versionID,
+				"version_number": newVersionNumber,
+				"title":         normalized.Title,
+				"exact_hash":    exactHash,
+				"quotient_hash": quotientHash,
+			},
+		})
+	}
+
+	return WorkDetail{
+		ID:           workID,
+		Status:       existing.Status,
+		CreatedAt:    existing.CreatedAt,
+		Version:      newVersionNumber,
+		ExactHash:    exactHash,
+		QuotientHash: quotientHash,
+		Packet:       normalized,
+	}, packets.ValidationErrors{}, nil
+}
+
+// SearchWork performs full-text search on work items.
+func (s *Service) SearchWork(ctx context.Context, query string, limit int) ([]WorkSummary, error) {
+	if limit <= 0 || limit > maxListLimit {
+		limit = defaultListLimit
+	}
+
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT wi.id, wi.kind, wi.visibility, wi.status, wi.created_at, wv.packet
+		FROM work_items AS wi
+		JOIN work_versions AS wv
+		  ON wv.work_item_id = wi.id
+		 AND wv.id = wi.current_version_id
+		WHERE wv.search_vector @@ plainto_tsquery('english', $1)
+		ORDER BY ts_rank(wv.search_vector, plainto_tsquery('english', $1)) DESC
+		LIMIT $2
+	`, query, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]WorkSummary, 0, limit)
+	for rows.Next() {
+		var (
+			row       WorkSummary
+			rawPacket []byte
+		)
+		if err := rows.Scan(&row.ID, &row.Kind, &row.Visibility, &row.Status, &row.CreatedAt, &rawPacket); err != nil {
+			return nil, err
+		}
+		var packet packets.NormalizedPacket
+		if err := json.Unmarshal(rawPacket, &packet); err != nil {
+			return nil, err
+		}
+		row.Title = packet.Title
+		out = append(out, row)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return out, nil
 }
