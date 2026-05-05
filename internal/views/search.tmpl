@@ -1,0 +1,38 @@
+{{define "title"}}Search: {{.Query}} | Bountystash{{end}}
+
+{{define "content"}}
+<section class="hero panel">
+  <div class="cta-row" style="margin-bottom:0.75rem;">
+    <span class="kicker">Search Results</span>
+  </div>
+  <h1>Results for "{{.Query}}"</h1>
+  <p style="color:var(--text-secondary); margin-top:0.5rem;">
+    Found {{len .Results}} work item(s)
+  </p>
+  <div class="cta-row" style="margin-top:0.75rem;">
+    <a class="action" href="/">← Back to home</a>
+    <a class="action" href="/api/search?q={{.Query}}">View JSON →</a>
+  </div>
+</section>
+
+{{if .Results}}
+<div class="grid">
+  {{range .Results}}
+  <article class="packet">
+    <div class="kind-badge {{.Kind}}">{{.Kind}}</div>
+    <div class="kind-badge {{.Visibility}}">{{.Visibility}}</div>
+    <h3><a href="/work/{{.ID}}">{{.Title}}</a></h3>
+    <p class="mono" style="font-size:0.75rem; color:var(--text-secondary);">{{.ID}}</p>
+    <p style="font-size:0.875rem; color:var(--text-secondary);">
+      Status: {{.Status}} · Created: {{.CreatedAt.Format "2006-01-02"}}
+    </p>
+  </article>
+  {{end}}
+</div>
+{{else}}
+<section class="panel empty-state">
+  <p>No results found for your search.</p>
+  <p style="font-size:0.875rem; color:var(--text-secondary);">Try different keywords or check the spelling.</p>
+</section>
+{{end}}
+{{end}}

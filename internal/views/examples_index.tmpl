@@ -1,0 +1,37 @@
+{{define "title"}}Examples | Bountystash{{end}}
+
+{{define "content"}}
+<section class="hero panel">
+  <div class="cta-row" style="margin-bottom:0.75rem;">
+    <span class="kicker">Seeded examples</span>
+  </div>
+  <h1>Browse Examples</h1>
+  <p style="color:var(--text-secondary); margin-top:0.5rem;">
+    Explore pre-built work item templates demonstrating different kinds and use cases.
+  </p>
+  <div class="cta-row" style="margin-top:0.75rem;">
+    <a class="action" href="/">← Back to home</a>
+  </div>
+</section>
+
+{{if .Examples}}
+<div class="grid">
+  {{range .Examples}}
+  <article class="packet">
+    <div class="kind-badge {{.Packet.Kind}}">{{.Packet.Kind}}</div>
+    <div class="kind-badge {{.Packet.Visibility}}">{{.Packet.Visibility}}</div>
+    <h3><a href="/examples/{{.Slug}}">{{.Packet.Title}}</a></h3>
+    <p class="mono" style="font-size:0.75rem; color:var(--text-secondary);">{{.Slug}}</p>
+    <p style="font-size:0.875rem; color:var(--text-secondary); margin-top:0.5rem;">
+      {{if eq .Packet.Kind "bounty"}}Fixed reward bounty{{else if eq .Packet.Kind "rfq"}}Request for quote{{else if eq .Packet.Kind "rfp"}}Request for proposal{{else}}Private security{{end}}
+    </p>
+    <a class="btn btn-secondary" href="/examples/{{.Slug}}" style="margin-top:0.75rem;">View Details →</a>
+  </article>
+  {{end}}
+</div>
+{{else}}
+<section class="panel empty-state">
+  <p>No examples available.</p>
+</section>
+{{end}}
+{{end}}

@@ -4,8 +4,11 @@ import "os"
 
 // Config holds runtime settings for the web server.
 type Config struct {
-	Addr        string
-	DatabaseURL string
+	Addr         string
+	DatabaseURL  string
+	WebhookURL   string
+	SupabaseURL  string
+	SupabaseKey  string
 }
 
 // LoadConfig reads configuration from environment with safe defaults.
@@ -16,7 +19,10 @@ func LoadConfig() Config {
 	}
 
 	return Config{
-		Addr:        ":" + port,
-		DatabaseURL: os.Getenv("DATABASE_URL"),
+		Addr:         ":" + port,
+		DatabaseURL:  os.Getenv("DATABASE_URL"),
+		WebhookURL:   os.Getenv("WEBHOOK_URL"),
+		SupabaseURL:  os.Getenv("SUPABASE_URL"),
+		SupabaseKey:  os.Getenv("SUPABASE_KEY"),
 	}
 }
