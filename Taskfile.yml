@@ -1,0 +1,68 @@
+version: "3"
+
+vars:
+  GOCYCLO_THRESHOLD: 8
+
+tasks:
+  default:
+    desc: Run full verification (test + build + complexity)
+    cmds:
+      - task: test
+      - task: build
+      - task: cyclo
+
+  test:
+    desc: Run all tests with coverage
+    cmds:
+      - go test -count=1 -cover ./...
+
+  test:short:
+    desc: Run tests without coverage (faster)
+    cmds:
+      - go test -count=1 ./...
+
+  test:coverage:
+    desc: Run tests with coverage and generate HTML report
+    cmds:
+      - go test -count=1 -coverprofile=coverage.out ./...
+      - go tool cover -html=coverage.out -o coverage.html
+      - echo "Coverage report: coverage.html"
+
+  build:
+    desc: Build all packages
+    cmds:
+      - go build ./...
+
+  cyclo:
+    desc: Check cyclomatic complexity (threshold={{.GOCYCLO_THRESHOLD}})
+    cmds:
+      - go install github.com/fzipp/gocyclo/cmd/gocyclo@latest
+      - gocyclo -over {{.GOCYCLO_THRESHOLD}} .
+
+  cyclo:report:
+    desc: Report cyclomatic complexity for all functions
+    cmds:
+      - go install github.com/fzipp/gocyclo/cmd/gocyclo@latest
+      - gocyclo -over 1 .
+
+  cyclo:service:
+    desc: Report cyclomatic complexity for service package
+    cmds:
+      - go install github.com/fzipp/gocyclo/cmd/gocyclo@latest
+      - gocyclo -over 1 ./internal/service/
+
+  lint:
+    desc: Run golangci-lint
+    cmds:
+      - golangci-lint run ./...
+
+  vet:
+    desc: Run go vet
+    cmds:
+      - go vet ./...
+
+  clean:
+    desc: Clean build artifacts
+    cmds:
+      - go clean -cache -testcache
+      - rm -f coverage.out coverage.html

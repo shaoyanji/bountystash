@@ -101,15 +101,36 @@ func (s *Service) CreateWork(ctx context.Context, input packets.DraftInput) (Wor
 		return WorkDetail{}, packets.ValidationErrors{}, err
 	}
 
+	normalized, validation, err := s.intakeNormalize(ctx, input)
+	if err != nil {
+		return WorkDetail{}, packets.ValidationErrors{}, err
+	}
+	if !validation.Empty() {
+		return WorkDetail{}, validation, nil
+	}
+
+	exactHash, quotientHash, packetJSON, err := hashPacket(normalized)
+	if err != nil {
+		return WorkDetail{}, packets.ValidationErrors{}, err
+	}
+
+	detail, err := s.persistNewWorkItem(ctx, normalized, exactHash, quotientHash, packetJSON)
+	if err != nil {
+		return WorkDetail{}, packets.ValidationErrors{}, err
+	}
+
+	s.dispatchWorkCreated(detail.ID, normalized, exactHash, quotientHash)
+	return detail, packets.ValidationErrors{}, nil
+}
+
+func (s *Service) intakeNormalize(ctx context.Context, input packets.DraftInput) (packets.NormalizedPacket, packets.ValidationErrors, error) {
 	validation := packets.ValidateDraftInput(input)
 	if !validation.Empty() {
-		if err := s.recordEvent(ctx, nil, eventIntakeValidationFailed, nil, nil, map[string]any{
+		_ = s.recordEvent(ctx, nil, eventIntakeValidationFailed, nil, nil, map[string]any{
 			"errors": validation,
 			"source": eventSource,
-		}); err != nil {
-			return WorkDetail{}, validation, err
-		}
-		return WorkDetail{}, validation, nil
+		})
+		return packets.NormalizedPacket{}, validation, nil
 	}
 
 	normalized := packets.NormalizeDraft(input)
@@ -122,34 +143,36 @@ func (s *Service) CreateWork(ctx context.Context, input packets.DraftInput) (Wor
 		"reward_model":        normalized.RewardModel,
 		"source":              eventSource,
 	}); err != nil {
-		return WorkDetail{}, packets.ValidationErrors{}, err
+		return packets.NormalizedPacket{}, packets.ValidationErrors{}, err
 	}
+	return normalized, packets.ValidationErrors{}, nil
+}
 
+func hashPacket(normalized packets.NormalizedPacket) (exactHash, quotientHash, packetJSON string, err error) {
 	packetBytes, err := canonicalJSON(normalized)
 	if err != nil {
-		return WorkDetail{}, packets.ValidationErrors{}, err
+		return "", "", "", err
 	}
-	exactHash := sha256Hex(packetBytes)
+	exactHash = sha256Hex(packetBytes)
 	quotientBytes, err := quotientProjectionJSON(normalized)
 	if err != nil {
-		return WorkDetail{}, packets.ValidationErrors{}, err
+		return "", "", "", err
 	}
-	quotientHash := sha256Hex(quotientBytes)
-	packetJSON := string(packetBytes)
+	quotientHash = sha256Hex(quotientBytes)
+	packetJSON = string(packetBytes)
+	return exactHash, quotientHash, packetJSON, nil
+}
 
+func (s *Service) persistNewWorkItem(ctx context.Context, normalized packets.NormalizedPacket, exactHash, quotientHash, packetJSON string) (WorkDetail, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return WorkDetail{}, packets.ValidationErrors{}, err
+		return WorkDetail{}, err
 	}
 	defer tx.Rollback()
 
-	workID, err := newUUID()
+	workID, versionID, err := newWorkAndVersionIDs()
 	if err != nil {
-		return WorkDetail{}, packets.ValidationErrors{}, err
-	}
-	versionID, err := newUUID()
-	if err != nil {
-		return WorkDetail{}, packets.ValidationErrors{}, err
+		return WorkDetail{}, err
 	}
 
 	var createdAt time.Time
@@ -158,21 +181,15 @@ func (s *Service) CreateWork(ctx context.Context, input packets.DraftInput) (Wor
 		VALUES ($1, $2, $3, $4, $5)
 		RETURNING created_at
 	`, workID, normalized.Kind, normalized.Visibility, "open", versionID).Scan(&createdAt); err != nil {
-		return WorkDetail{}, packets.ValidationErrors{}, err
+		return WorkDetail{}, err
 	}
 
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO work_versions (
-			id,
-			work_item_id,
-			version_number,
-			packet,
-			exact_hash,
-			quotient_hash
-		)
-		VALUES ($1, $2, $3, $4::jsonb, $5, $6)
+			id, work_item_id, version_number, packet, exact_hash, quotient_hash
+		) VALUES ($1, $2, $3, $4::jsonb, $5, $6)
 	`, versionID, workID, 1, packetJSON, exactHash, quotientHash); err != nil {
-		return WorkDetail{}, packets.ValidationErrors{}, err
+		return WorkDetail{}, err
 	}
 
 	if err := s.recordEvent(ctx, tx, eventWorkItemCreated, ptrString(workID), ptrString(versionID), map[string]any{
@@ -181,7 +198,7 @@ func (s *Service) CreateWork(ctx context.Context, input packets.DraftInput) (Wor
 		"status":     "open",
 		"source":     eventSource,
 	}); err != nil {
-		return WorkDetail{}, packets.ValidationErrors{}, err
+		return WorkDetail{}, err
 	}
 
 	if err := s.recordEvent(ctx, tx, eventWorkVersionPersisted, ptrString(workID), ptrString(versionID), map[string]any{
@@ -190,27 +207,11 @@ func (s *Service) CreateWork(ctx context.Context, input packets.DraftInput) (Wor
 		"quotient_hash":  quotientHash,
 		"source":         eventSource,
 	}); err != nil {
-		return WorkDetail{}, packets.ValidationErrors{}, err
+		return WorkDetail{}, err
 	}
 
 	if err := tx.Commit(); err != nil {
-		return WorkDetail{}, packets.ValidationErrors{}, err
-	}
-
-	// Dispatch webhook event asynchronously
-	if s.dispatcher != nil {
-		s.dispatcher.Enqueue(events.Event{
-			Type: "work_item_created",
-			Payload: map[string]interface{}{
-				"id":           workID,
-				"kind":         normalized.Kind,
-				"visibility":   normalized.Visibility,
-				"title":        normalized.Title,
-				"version":      1,
-				"exact_hash":   exactHash,
-				"quotient_hash": quotientHash,
-			},
-		})
+		return WorkDetail{}, err
 	}
 
 	return WorkDetail{
@@ -221,7 +222,25 @@ func (s *Service) CreateWork(ctx context.Context, input packets.DraftInput) (Wor
 		ExactHash:    exactHash,
 		QuotientHash: quotientHash,
 		Packet:       normalized,
-	}, packets.ValidationErrors{}, nil
+	}, nil
+}
+
+func (s *Service) dispatchWorkCreated(workID string, normalized packets.NormalizedPacket, exactHash, quotientHash string) {
+	if s.dispatcher == nil {
+		return
+	}
+	s.dispatcher.Enqueue(events.Event{
+		Type: "work_item_created",
+		Payload: map[string]interface{}{
+			"id":            workID,
+			"kind":          normalized.Kind,
+			"visibility":    normalized.Visibility,
+			"title":         normalized.Title,
+			"version":       1,
+			"exact_hash":    exactHash,
+			"quotient_hash": quotientHash,
+		},
+	})
 }
 
 func (s *Service) GetWork(ctx context.Context, workID string) (WorkDetail, error) {
@@ -276,9 +295,7 @@ func (s *Service) GetWork(ctx context.Context, workID string) (WorkDetail, error
 }
 
 func (s *Service) ListRecentWork(ctx context.Context, limit int) ([]WorkSummary, error) {
-	if limit <= 0 || limit > maxListLimit {
-		limit = defaultListLimit
-	}
+	limit = normalizeListLimit(limit)
 
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT wi.id, wi.kind, wi.visibility, wi.status, wi.created_at, wv.packet
@@ -420,9 +437,7 @@ func (s *Service) WorkHistory(ctx context.Context, workID string) ([]Event, erro
 }
 
 func (s *Service) RecentEvents(ctx context.Context, limit int) ([]Event, error) {
-	if limit <= 0 || limit > maxListLimit {
-		limit = defaultListLimit
-	}
+	limit = normalizeListLimit(limit)
 
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, event_type, work_item_id, work_version_id, payload, created_at
@@ -551,9 +566,27 @@ func ptrString(v string) *string {
 	return &v
 }
 
+func newWorkAndVersionIDs() (workID, versionID string, err error) {
+	workID, err = newUUID()
+	if err != nil {
+		return "", "", err
+	}
+	versionID, err = newUUID()
+	if err != nil {
+		return "", "", err
+	}
+	return workID, versionID, nil
+}
+
+func normalizeListLimit(limit int) int {
+	if limit <= 0 || limit > maxListLimit {
+		return defaultListLimit
+	}
+	return limit
+}
+
 // CreateWorkVersion creates a new immutable version of an existing work item.
 func (s *Service) CreateWorkVersion(ctx context.Context, workID string, input packets.DraftInput) (WorkDetail, packets.ValidationErrors, error) {
-	// First, fetch the existing work item to verify it exists
 	existing, err := s.GetWork(ctx, workID)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -562,99 +595,80 @@ func (s *Service) CreateWorkVersion(ctx context.Context, workID string, input pa
 		return WorkDetail{}, packets.ValidationErrors{}, err
 	}
 
-	// Validate and normalize the new input
 	validation := packets.ValidateDraftInput(input)
 	if !validation.Empty() {
 		return WorkDetail{}, validation, nil
 	}
 
 	normalized := packets.NormalizeDraft(input)
-
-	packetBytes, err := canonicalJSON(normalized)
+	exactHash, quotientHash, packetJSON, err := hashPacket(normalized)
 	if err != nil {
 		return WorkDetail{}, packets.ValidationErrors{}, err
 	}
-	exactHash := sha256Hex(packetBytes)
-	quotientBytes, err := quotientProjectionJSON(normalized)
+
+	detail, err := s.persistNewWorkVersion(ctx, workID, existing, exactHash, quotientHash, packetJSON)
 	if err != nil {
 		return WorkDetail{}, packets.ValidationErrors{}, err
 	}
-	quotientHash := sha256Hex(quotientBytes)
-	packetJSON := string(packetBytes)
 
+	s.dispatchWorkVersionCreated(detail, normalized, exactHash, quotientHash)
+	return WorkDetail{
+		ID:           workID,
+		Status:       existing.Status,
+		CreatedAt:    existing.CreatedAt,
+		Version:      detail.Version,
+		ExactHash:    exactHash,
+		QuotientHash: quotientHash,
+		Packet:       normalized,
+	}, packets.ValidationErrors{}, nil
+}
+
+func (s *Service) persistNewWorkVersion(ctx context.Context, workID string, existing WorkDetail, exactHash, quotientHash, packetJSON string) (WorkDetail, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return WorkDetail{}, packets.ValidationErrors{}, err
+		return WorkDetail{}, err
 	}
 	defer tx.Rollback()
 
 	versionID, err := newUUID()
 	if err != nil {
-		return WorkDetail{}, packets.ValidationErrors{}, err
+		return WorkDetail{}, err
 	}
 
-	// Get the next version number
 	var newVersionNumber int
-	err = tx.QueryRowContext(ctx, `
+	if err = tx.QueryRowContext(ctx, `
 		SELECT COALESCE(MAX(version_number), 0) + 1
 		FROM work_versions
 		WHERE work_item_id = $1
-	`, workID).Scan(&newVersionNumber)
-	if err != nil {
-		return WorkDetail{}, packets.ValidationErrors{}, err
+	`, workID).Scan(&newVersionNumber); err != nil {
+		return WorkDetail{}, err
 	}
 
-	// Insert the new version
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO work_versions (
-			id,
-			work_item_id,
-			version_number,
-			packet,
-			exact_hash,
-			quotient_hash
-		)
-		VALUES ($1, $2, $3, $4::jsonb, $5, $6)
+			id, work_item_id, version_number, packet, exact_hash, quotient_hash
+		) VALUES ($1, $2, $3, $4::jsonb, $5, $6)
 	`, versionID, workID, newVersionNumber, packetJSON, exactHash, quotientHash); err != nil {
-		return WorkDetail{}, packets.ValidationErrors{}, err
+		return WorkDetail{}, err
 	}
 
-	// Update the current_version_id on the work item
 	if _, err := tx.ExecContext(ctx, `
-		UPDATE work_items
-		SET current_version_id = $1, updated_at = NOW()
-		WHERE id = $2
+		UPDATE work_items SET current_version_id = $1, updated_at = NOW() WHERE id = $2
 	`, versionID, workID); err != nil {
-		return WorkDetail{}, packets.ValidationErrors{}, err
+		return WorkDetail{}, err
 	}
 
-	// Record the work_version_persisted event
 	if err := s.recordEvent(ctx, tx, eventWorkVersionPersisted, ptrString(workID), ptrString(versionID), map[string]any{
 		"version_number": newVersionNumber,
 		"exact_hash":     exactHash,
 		"quotient_hash":  quotientHash,
 		"source":         eventSource,
 	}); err != nil {
-		return WorkDetail{}, packets.ValidationErrors{}, err
+		return WorkDetail{}, err
 	}
 
 	if err := tx.Commit(); err != nil {
-		return WorkDetail{}, packets.ValidationErrors{}, err
-	}
-
-	// Dispatch webhook event asynchronously
-	if s.dispatcher != nil {
-		s.dispatcher.Enqueue(events.Event{
-			Type: "work_version_created",
-			Payload: map[string]interface{}{
-				"id":            workID,
-				"version_id":    versionID,
-				"version_number": newVersionNumber,
-				"title":         normalized.Title,
-				"exact_hash":    exactHash,
-				"quotient_hash": quotientHash,
-			},
-		})
+		return WorkDetail{}, err
 	}
 
 	return WorkDetail{
@@ -664,15 +678,29 @@ func (s *Service) CreateWorkVersion(ctx context.Context, workID string, input pa
 		Version:      newVersionNumber,
 		ExactHash:    exactHash,
 		QuotientHash: quotientHash,
-		Packet:       normalized,
-	}, packets.ValidationErrors{}, nil
+	}, nil
+}
+
+func (s *Service) dispatchWorkVersionCreated(detail WorkDetail, normalized packets.NormalizedPacket, exactHash, quotientHash string) {
+	if s.dispatcher == nil {
+		return
+	}
+	s.dispatcher.Enqueue(events.Event{
+		Type: "work_version_created",
+		Payload: map[string]interface{}{
+			"id":             detail.ID,
+			"version_id":     detail.ID,
+			"version_number": detail.Version,
+			"title":          normalized.Title,
+			"exact_hash":     exactHash,
+			"quotient_hash":  quotientHash,
+		},
+	})
 }
 
 // SearchWork performs full-text search on work items.
 func (s *Service) SearchWork(ctx context.Context, query string, limit int) ([]WorkSummary, error) {
-	if limit <= 0 || limit > maxListLimit {
-		limit = defaultListLimit
-	}
+	limit = normalizeListLimit(limit)
 
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT wi.id, wi.kind, wi.visibility, wi.status, wi.created_at, wv.packet
