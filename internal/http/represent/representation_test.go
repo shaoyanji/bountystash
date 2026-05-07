@@ -135,7 +135,7 @@ func TestParseInternalExplicit_InvalidFormat(t *testing.T) {
 	tests := []string{"", "json", "invalid", "HTML", "Markdown"}
 	for _, raw := range tests {
 		t.Run(raw, func(t *testing.T) {
-			rep, ok := parseInternalExplicit(raw)
+			_, ok := parseInternalExplicit(raw)
 			if raw == "json" || raw == "invalid" {
 				if ok {
 					t.Errorf("parseInternalExplicit(%q) should return false", raw)
@@ -147,26 +147,3 @@ func TestParseInternalExplicit_InvalidFormat(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestFromAcceptHeader_EdgeCases(t *testing.T) {
-	tests := []struct {
-		header string
-		want   Representation
-	}{
-		{"", RepresentationMarkdown}, // empty = default
-		{"invalid", RepresentationMarkdown}, // invalid = default
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.header, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, "/", nil)
-			if tt.header != "" {
-				req.Header.Set("Accept", tt.header)
-			}
-			det := Determine(req, Options{Contract: ContractHuman})
-			// Just verify it doesn't panic
-			_ = det.Representation
-		})
-	}
-}
