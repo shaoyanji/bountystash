@@ -131,19 +131,66 @@ func TestContentTypeMappings(t *testing.T) {
 	}
 }
 
-func TestParseInternalExplicit_InvalidFormat(t *testing.T) {
-	tests := []string{"", "json", "invalid", "HTML", "Markdown"}
-	for _, raw := range tests {
-		t.Run(raw, func(t *testing.T) {
-			_, ok := parseInternalExplicit(raw)
-			if raw == "json" || raw == "invalid" {
-				if ok {
-					t.Errorf("parseInternalExplicit(%q) should return false", raw)
-				}
-			} else if raw != "" {
-				if !ok {
-					t.Errorf("parseInternalExplicit(%q) should return true", raw)
-				}
-			}
-		})
+func TestParseInternalExplicit(t *testing.T) {
+	tests := []struct {
+		raw  string
+		want Representation
+	}{
+		{"html", RepresentationHTML},
+		{"markdown", RepresentationMarkdown},
+		{"md", RepresentationMarkdown},
+		{"text", RepresentationPlainText},
+		{"plaintext", RepresentationPlainText},
+		{"json", RepresentationJSON},
 	}
+	for _, tt := range tests {
+		rep, ok := parseInternalExplicit(tt.raw)
+		if !ok {
+			t.Errorf("parseInternalExplicit(%q) = false, want true", tt.raw)
+		}
+		if rep != tt.want {
+			t.Errorf("parseInternalExplicit(%q) = %s, want %s", tt.raw, rep, tt.want)
+		}
+	}
+}
+
+func TestFromAcceptHeader(t *testing.T) {
+	tests := []struct {
+		header string
+		want   Representation
+	}{
+		{"text/html", RepresentationHTML},
+		{"text/markdown", RepresentationMarkdown},
+		{"text/plain", RepresentationPlainText},
+		{"*/*", RepresentationMarkdown},
+	}
+	for _, tt := range tests {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Header.Set("Accept", tt.header)
+		det := Determine(req, Options{Contract: ContractHuman})
+		if det.Representation != tt.want {
+			t.Errorf("Accept %q: representation = %s, want %s", tt.header, det.Representation, tt.want)
+		}
+	}
+}
+
+func TestFromUserAgent(t *testing.T) {
+	tests := []struct {
+		ua    string
+		want Representation
+	}{
+		{"curl/8.0.1", RepresentationMarkdown},
+		{"Mozilla/5.0", RepresentationHTML},
+		{"", RepresentationMarkdown},
+	}
+	for _, tt := range tests {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		if tt.ua != "" {
+			req.Header.Set("User-Agent", tt.ua)
+		}
+		det := Determine(req, Options{Contract: ContractHuman})
+		if det.Representation != tt.want {
+			t.Errorf("UA %q: representation = %s, want %s", tt.ua, det.Representation, tt.want)
+		}
+	}
+}
