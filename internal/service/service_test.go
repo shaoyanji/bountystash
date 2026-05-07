@@ -74,7 +74,7 @@ func TestServiceCreateWorkValidationErrors(t *testing.T) {
 	recorder.ExpectExec("INSERT INTO backend_events")
 	recorder.ExpectExec("INSERT INTO backend_events")
 
-	svc := NewService(db)
+	svc := NewService(db, nil)
 	_, validation, err := svc.CreateWork(context.Background(), packets.DraftInput{
 		Title:      "",
 		Kind:       "invalid",
@@ -110,7 +110,7 @@ func TestServiceCreateWorkRecordsEvents(t *testing.T) {
 	recorder.ExpectExec("INSERT INTO backend_events")
 	recorder.ExpectCommit()
 
-	svc := NewService(db)
+	svc := NewService(db, nil)
 	detail, validation, err := svc.CreateWork(context.Background(), packets.DraftInput{
 		Title:              "title",
 		Kind:               "bounty",
@@ -150,7 +150,7 @@ func TestServiceReviewQueueRecordsEvent(t *testing.T) {
 	)
 	recorder.ExpectExec("INSERT INTO backend_events")
 
-	svc := NewService(db)
+	svc := NewService(db, nil)
 	queue, err := svc.ReviewQueue(context.Background())
 	if err != nil {
 		t.Fatalf("ReviewQueue error: %v", err)
@@ -189,7 +189,7 @@ func TestServiceWorkHistoryReturnsEvents(t *testing.T) {
 		},
 	)
 
-	svc := NewService(db)
+	svc := NewService(db, nil)
 	events, err := svc.WorkHistory(context.Background(), "work-1")
 	if err != nil {
 		t.Fatalf("WorkHistory error: %v", err)
@@ -215,7 +215,7 @@ func TestServiceWorkHistoryEmpty(t *testing.T) {
 		[]string{"id", "event_type", "work_item_id", "work_version_id", "payload", "created_at"},
 	)
 
-	svc := NewService(db)
+	svc := NewService(db, nil)
 	events, err := svc.WorkHistory(context.Background(), "work-empty")
 	if err != nil {
 		t.Fatalf("WorkHistory error: %v", err)
@@ -254,7 +254,7 @@ func TestServiceRecentEvents(t *testing.T) {
 		},
 	)
 
-	svc := NewService(db)
+	svc := NewService(db, nil)
 	events, err := svc.RecentEvents(context.Background(), 10)
 	if err != nil {
 		t.Fatalf("RecentEvents error: %v", err)
@@ -280,7 +280,7 @@ func TestServiceRecentEventsEmpty(t *testing.T) {
 		[]string{"id", "event_type", "work_item_id", "work_version_id", "payload", "created_at"},
 	)
 
-	svc := NewService(db)
+	svc := NewService(db, nil)
 	events, err := svc.RecentEvents(context.Background(), 10)
 	if err != nil {
 		t.Fatalf("RecentEvents error: %v", err)
@@ -301,7 +301,7 @@ func TestServiceRecentEventsDefaultLimit(t *testing.T) {
 	}()
 	recorder.ExpectQuery("SELECT id")
 
-	svc := NewService(db)
+	svc := NewService(db, nil)
 	_, err := svc.RecentEvents(context.Background(), 0)
 	if err != nil {
 		t.Fatalf("RecentEvents error: %v", err)
@@ -319,7 +319,7 @@ func TestServiceRecentEventsMaxLimit(t *testing.T) {
 	}()
 	recorder.ExpectQuery("SELECT id")
 
-	svc := NewService(db)
+	svc := NewService(db, nil)
 	_, err := svc.RecentEvents(context.Background(), 500)
 	if err != nil {
 		t.Fatalf("RecentEvents error: %v", err)

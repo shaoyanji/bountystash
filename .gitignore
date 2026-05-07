@@ -1,4 +1,3 @@
-```
 # Go-specific ignores
 *.o
 *.a
@@ -43,4 +42,3 @@ htmlcov/
 # Temporary files
 *.tmp
 *~
-```
