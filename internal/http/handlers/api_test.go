@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/shaoyanji/bountystash/internal/packets"
 	"github.com/shaoyanji/bountystash/internal/service"
 )
 
@@ -247,5 +249,86 @@ func TestAPIRecentEventsInvalidLimit(t *testing.T) {
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestAPIExampleShow(t *testing.T) {
+	h := NewAPIHandler(stubService{})
+
+	req := withRouteParam(httptest.NewRequest(http.MethodGet, "/api/examples/auth-loop", nil), "slug", "auth-loop")
+	rec := httptest.NewRecorder()
+	h.HandleExampleShow(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d, body: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+}
+
+func TestAPIExampleShowNotFound(t *testing.T) {
+	h := NewAPIHandler(stubService{})
+
+	req := withRouteParam(httptest.NewRequest(http.MethodGet, "/api/examples/non-existent", nil), "slug", "non-existent")
+	rec := httptest.NewRecorder()
+	h.HandleExampleShow(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNotFound)
+	}
+}
+
+func TestAPIWorkList(t *testing.T) {
+	svc := stubService{
+		list: func(ctx context.Context, limit int) ([]service.WorkSummary, error) {
+			return []service.WorkSummary{
+				{ID: "work-1", Title: "Work 1", Kind: "bounty"},
+				{ID: "work-2", Title: "Work 2", Kind: "rfq"},
+			}, nil
+		},
+	}
+	h := NewAPIHandler(svc)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/work", nil)
+	rec := httptest.NewRecorder()
+	h.HandleWorkList(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+}
+
+func TestAPIWorkShow(t *testing.T) {
+	svc := stubService{
+		get: func(ctx context.Context, id string) (service.WorkDetail, error) {
+			return service.WorkDetail{
+				ID:    id,
+				Packet: packets.NormalizedPacket{Title: "Test Work"},
+			}, nil
+		},
+	}
+	h := NewAPIHandler(svc)
+
+	req := withRouteParam(httptest.NewRequest(http.MethodGet, "/api/work/123e4567-e89b-12d3-a456-426614174000", nil), "id", "123e4567-e89b-12d3-a456-426614174000")
+	rec := httptest.NewRecorder()
+	h.HandleWorkShow(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d, body: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+}
+
+func TestAPIWorkShowNotFound(t *testing.T) {
+	svc := stubService{
+		get: func(ctx context.Context, id string) (service.WorkDetail, error) {
+			return service.WorkDetail{}, sql.ErrNoRows
+		},
+	}
+	h := NewAPIHandler(svc)
+
+	req := withRouteParam(httptest.NewRequest(http.MethodGet, "/api/work/123e4567-e89b-12d3-a456-426614174001", nil), "id", "123e4567-e89b-12d3-a456-426614174001")
+	rec := httptest.NewRecorder()
+	h.HandleWorkShow(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNotFound)
 	}
 }

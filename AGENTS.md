@@ -384,6 +384,32 @@ Examples:
 
 ---
 
+## Build notes for agents
+
+### Go version stability
+The `go.mod` file specifies the minimum Go version. The installed toolchain may be newer (e.g., go.mod says `go 1.25.7` but `go version` reports `go1.26.1`). **Never downgrade the go.mod version** — the PR merge cycle showed that changing `go 1.25.7` to `go 1.19` broke `go mod tidy` and the build. If the go.mod version is wrong, restore it from git history and run `go mod tidy`.
+
+### CGO_ENABLED=0 for portable builds
+Release and cross-compilation targets set `CGO_ENABLED=0` (see `.github/workflows/release.yml`). This produces a pure-Go binary with no C dependencies. For local builds this is usually optional, but keep it in mind for Nix/docker builds.
+
+### Test coverage expectation
+Agents should aim for **>80% coverage** on packages they touch. Packages that currently lack test files: `cmd/web`, `internal/app`, `internal/auth`, `internal/events`, `internal/middleware`, `internal/views`, `internal/version`. When adding features to these, add tests.
+
+### Post-merge state (as of 2026-05-07)
+The following milestones are complete and merged:
+- **0.1.7**: service layer + `backend_events` table + event recording
+- **0.1.8**: `GET /work/{id}/history` + `/api/work/{id}/history` (work history)
+- **0.1.9**: `GET /history` + `/api/events/recent` (system-wide activity ledger)
+
+Additionally merged (out-of-scope but useful):
+- Supabase JWT auth + RBAC middleware (`internal/auth/`, `internal/middleware/`)
+- Work item versioning (`POST /work/{id}/versions`)
+- Full-text search (`/search` + migration 0003)
+- Webhook notifications (`internal/events/webhook.go`)
+- Examples index page (`/examples`)
+
+---
+
 ## Summary
 
 Build Bountystash as a **thin, verifiable, relational, server-rendered system**.
