@@ -9,12 +9,14 @@ import (
 )
 
 type stubService struct {
-	create       func(context.Context, packets.DraftInput) (service.WorkDetail, packets.ValidationErrors, error)
-	get          func(context.Context, string) (service.WorkDetail, error)
-	list         func(context.Context, int) ([]service.WorkSummary, error)
-	review       func(context.Context) (service.ReviewQueueData, error)
-	history      func(context.Context, string) ([]service.Event, error)
-	recentEvents func(context.Context, int) ([]service.Event, error)
+	create           func(context.Context, packets.DraftInput) (service.WorkDetail, packets.ValidationErrors, error)
+	get              func(context.Context, string) (service.WorkDetail, error)
+	list             func(context.Context, int) ([]service.WorkSummary, error)
+	review           func(context.Context) (service.ReviewQueueData, error)
+	history          func(context.Context, string) ([]service.Event, error)
+	recentEvents     func(context.Context, int) ([]service.Event, error)
+	createWorkVersion func(context.Context, string, packets.DraftInput) (service.WorkDetail, packets.ValidationErrors, error)
+	searchWork       func(context.Context, string, int) ([]service.WorkSummary, error)
 }
 
 func (s stubService) CreateWork(ctx context.Context, input packets.DraftInput) (service.WorkDetail, packets.ValidationErrors, error) {
@@ -55,6 +57,20 @@ func (s stubService) WorkHistory(ctx context.Context, id string) ([]service.Even
 func (s stubService) RecentEvents(ctx context.Context, limit int) ([]service.Event, error) {
 	if s.recentEvents != nil {
 		return s.recentEvents(ctx, limit)
+	}
+	return nil, errors.New("not implemented")
+}
+
+func (s stubService) CreateWorkVersion(ctx context.Context, workID string, input packets.DraftInput) (service.WorkDetail, packets.ValidationErrors, error) {
+	if s.createWorkVersion != nil {
+		return s.createWorkVersion(ctx, workID, input)
+	}
+	return service.WorkDetail{}, packets.ValidationErrors{}, errors.New("not implemented")
+}
+
+func (s stubService) SearchWork(ctx context.Context, query string, limit int) ([]service.WorkSummary, error) {
+	if s.searchWork != nil {
+		return s.searchWork(ctx, query, limit)
 	}
 	return nil, errors.New("not implemented")
 }

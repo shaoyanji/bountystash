@@ -1,6 +1,6 @@
 module github.com/shaoyanji/bountystash
 
-go 1.25.7
+go 1.25.0
 
 require (
 	github.com/charmbracelet/bubbles v1.0.0

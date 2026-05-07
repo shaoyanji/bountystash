@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/shaoyanji/bountystash/internal/events"
 	"github.com/shaoyanji/bountystash/internal/http/handlers"
 	"github.com/shaoyanji/bountystash/internal/service"
 	"github.com/shaoyanji/bountystash/internal/static"
@@ -18,7 +19,8 @@ func NewRouter(cfg Config) (http.Handler, error) {
 		return nil, err
 	}
 
-	svc := service.NewService(db)
+	dispatcher := events.NewDispatcher(cfg.WebhookURL, 100, 3)
+	svc := service.NewService(db, dispatcher)
 
 	draftHandler, err := handlers.NewDraftHandler(svc)
 	if err != nil {
